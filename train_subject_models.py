@@ -164,7 +164,7 @@ if __name__ == '__main__':
 
     print(f'Training {count} models from index {start}')
     nets = [get_subject_net() for _ in range(count)]
-    fns = [get_subject_function(fn_name, random.random()) _ in range(count)]
+    fns = [get_subject_fn(fn_name, random.random()) for _ in range(count)]
     train_subject_nets(nets, fns)
 
     print('Evaluating models')
