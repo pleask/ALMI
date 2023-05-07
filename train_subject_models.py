@@ -145,6 +145,7 @@ get_subject_model_metadata_path = lambda i: f"{SUBJECT_MODEL_PATH}/{i}_metadata.
 
 
 # TODO: Introduce more functions as per notes
+# TODO: This would probably be nicer if it returned classes that are instantiated with the parameters
 def get_subject_fn(fn_name, *params):
     if fn_name == 'addition':
         return partial(lambda c, x: x + c, params[0])
@@ -158,12 +159,12 @@ if __name__ == '__main__':
     start = int(sys.argv[2])
     count = int(sys.argv[3])
     seed = int(sys.argv[4])
-    fn = get_subject_fn(sys.argv[5])
+    fn_name = sys.argv[5]
     random.seed(a=seed)
 
     print(f'Training {count} models from index {start}')
     nets = [get_subject_net() for _ in range(count)]
-    fns = [lambda x: x**get_exponent() for _ in range(count)]
+    fns = [get_subject_function(fn_name, random.random()) _ in range(count)]
     train_subject_nets(nets, fns)
 
     print('Evaluating models')
