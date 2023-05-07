@@ -8,15 +8,15 @@ Takes exactly three arguments:
   think this should be around 5, but this might depend on the GPU.
 - seed: the random seed to use. Should be different for all runs of this script
   within an experiment, and the same for each run across experiments.
+- fn: the function to train the subject nets on. Eg. 'addition' for addition.
 """
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import Dataset, DataLoader
 import sys
 import random
 import json
-import math
+from functools import partial
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 """
@@ -73,13 +73,13 @@ SUBJECT_MODEL_PATH = "./subject_models"
 get_exponent = lambda: random.random() * 10.0
 
 
-def get_subject_data(exponent, batch_count=2**10):
+def get_subject_data(fn, batch_count=2**10):
     """
     Generate random data on the GPU for training the subject networks.
     """
     x = torch.rand((batch_count, SUBJECT_BATCH_SIZE), device=DEVICE) * 10.0
     x = torch.unsqueeze(x, dim=1)
-    y = x**exponent
+    y = fn(x)
     data = torch.empty((x.shape[0], 2, x.shape[2]), device=DEVICE, dtype=torch.float32)
     torch.cat((x, y), dim=1, out=data)
     data = torch.unsqueeze(data, dim=3)
@@ -101,13 +101,13 @@ def get_subject_net():
     ).to(DEVICE)
 
 
-def train_subject_nets(nets, exponents):
+def train_subject_nets(nets, fns):
     """
     Trains subject networks in parallel. From brief testing it seems 5 subject nets
     can be trained in parallel, but it's up to the client to check this.
     """
     optimizers = [optim.Adam(net.parameters(), lr=0.01) for net in nets]
-    training_data = [get_subject_data(exponent) for exponent in exponents]
+    training_data = [get_subject_data(fn) for fn in fns]
     parallel_nets = [nn.DataParallel(net) for net in nets]
     for epoch in range(SUBJECT_EPOCHS):
         if epoch % 1000 == 0:
@@ -122,13 +122,13 @@ def train_subject_nets(nets, exponents):
                 optimizer.step()
 
 
-def evaluate_subject_nets(nets, exponents):
+def evaluate_subject_nets(nets, fns):
     """
     Evaluates the subject net using a new random dataset.
     """
     losses = []
-    for net, exponent in zip(nets, exponents):
-        eval_data = get_subject_data(exponent, batch_count=1)[0]
+    for net, fn in zip(nets, fns):
+        eval_data = get_subject_data(fn, batch_count=1)[0]
         inputs, labels = eval_data
         inputs = inputs.to(DEVICE)
         labels = labels.to(DEVICE)
@@ -144,24 +144,34 @@ get_subject_model_path = lambda i: f"{SUBJECT_MODEL_PATH}/{i}.pickle"
 get_subject_model_metadata_path = lambda i: f"{SUBJECT_MODEL_PATH}/{i}_metadata.json"
 
 
+# TODO: Introduce more functions as per notes
+def get_subject_fn(fn_name, *params):
+    if fn_name == 'addition':
+        return partial(lambda c, x: x + c, params[0])
+    elif fn_name == 'multiplication':
+        return partial(lambda c, x: x * c, params[0])
+    raise ValueError('Invalid function name')
+
+
 if __name__ == '__main__':
     path = sys.argv[1]
     start = int(sys.argv[2])
     count = int(sys.argv[3])
     seed = int(sys.argv[4])
+    fn = get_subject_fn(sys.argv[5])
     random.seed(a=seed)
 
     print(f'Training {count} models from index {start}')
     nets = [get_subject_net() for _ in range(count)]
-    exponents = [get_exponent() for _ in range(count)]
-    train_subject_nets(nets, exponents)
+    fns = [lambda x: x**get_exponent() for _ in range(count)]
+    train_subject_nets(nets, fns)
 
     print('Evaluating models')
-    losses = evaluate_subject_nets(nets, exponents)
+    losses = evaluate_subject_nets(nets, fns)
     metadata = [{
         "exponent": exponent,
         "loss": loss
-    } for exponent, loss in zip(exponents, losses)]
+    } for exponent, loss in zip(fns, losses)]
 
     print('Saving models')
     for i, (net, md) in enumerate(zip(nets, metadata)):
