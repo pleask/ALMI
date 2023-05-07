@@ -158,7 +158,7 @@ if __name__ == '__main__':
     count = int(sys.argv[3])
     seed = int(sys.argv[4])
     fn_name = sys.argv[5]
-    epochs = sys.argv[6]
+    epochs = int(sys.argv[6])
     random.seed(a=seed)
 
     print(f'Training {count} models from index {start}')
