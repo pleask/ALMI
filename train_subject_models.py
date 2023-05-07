@@ -9,6 +9,7 @@ Takes exactly three arguments:
 - seed: the random seed to use. Should be different for all runs of this script
   within an experiment, and the same for each run across experiments.
 - fn: the function to train the subject nets on. Eg. 'addition' for addition.
+- epochs: the number of epochs for which to train the models.
 """
 import torch
 import torch.nn as nn
@@ -36,19 +37,6 @@ Layer size 100 with 10401 total parameters achieved min loss of 0.05302942544221
 network that performs better
 """
 SUBJECT_LAYER_SIZE = 25
-"""
-The number of epochs for training the subject networks.
-
-Ran a grid search for epochs on LAYER_SIZE = 25 with the following results
-200 epochs achieved avg loss of 15.250823020935059
-500 epochs achieved avg loss of 6.639222621917725
-1000 epochs achieved avg loss of 1.6066440343856812
-2000 epochs achieved avg loss of 2.3655612468719482
-5000 epochs achieved avg loss of 0.7449145317077637
-10000 epochs achieved avg loss of 0.28002771735191345
-Also ran this for 20k epochs and the performance was not better than 10k
-"""
-SUBJECT_EPOCHS = 10000
 """
 The batch size when training the subject neworks.
 
@@ -101,17 +89,27 @@ def get_subject_net():
     ).to(DEVICE)
 
 
-def train_subject_nets(nets, fns):
+def train_subject_nets(nets, fns, epochs):
     """
     Trains subject networks in parallel. From brief testing it seems 5 subject nets
     can be trained in parallel, but it's up to the client to check this.
+
+    epochs: The number of epochs for training the subject networks.
+    Ran a grid search for epochs on LAYER_SIZE = 25 with the following results
+    200 epochs achieved avg loss of 15.250823020935059
+    500 epochs achieved avg loss of 6.639222621917725
+    1000 epochs achieved avg loss of 1.6066440343856812
+    2000 epochs achieved avg loss of 2.3655612468719482
+    5000 epochs achieved avg loss of 0.7449145317077637
+    10000 epochs achieved avg loss of 0.28002771735191345
+    Also ran this for 20k epochs and the performance was not better than 10k
     """
     optimizers = [optim.Adam(net.parameters(), lr=0.01) for net in nets]
     training_data = [get_subject_data(fn) for fn in fns]
     parallel_nets = [nn.DataParallel(net) for net in nets]
-    for epoch in range(SUBJECT_EPOCHS):
+    for epoch in range(epochs):
         if epoch % 1000 == 0:
-            print(f'Epoch {epoch} of {SUBJECT_EPOCHS}', flush=True)
+            print(f'Epoch {epoch} of {epochs}', flush=True)
         for batch_idx in range(len(training_data)):
             for net, data, optimizer in zip(parallel_nets, training_data, optimizers):
                 optimizer.zero_grad()
@@ -160,12 +158,13 @@ if __name__ == '__main__':
     count = int(sys.argv[3])
     seed = int(sys.argv[4])
     fn_name = sys.argv[5]
+    epochs = sys.argv[6]
     random.seed(a=seed)
 
     print(f'Training {count} models from index {start}')
     nets = [get_subject_net() for _ in range(count)]
     fns = [get_subject_fn(fn_name, random.random()) for _ in range(count)]
-    train_subject_nets(nets, fns)
+    train_subject_nets(nets, fns, epochs)
 
     print('Evaluating models')
     losses = evaluate_subject_nets(nets, fns)
