@@ -144,11 +144,19 @@ get_subject_model_metadata_path = lambda i: f"{SUBJECT_MODEL_PATH}/{i}_metadata.
 
 # TODO: Introduce more functions as per notes
 # TODO: This would probably be nicer if it returned classes that are instantiated with the parameters
-def get_subject_fn(fn_name, *params):
+def get_subject_fn(fn_name, param):
+    """
+    Returns a torch function that implements the specified function.
+
+    The functions map onto the range [0, 100] (give or take).
+
+    fn_name: the name of the function
+    param: a float between 0 and 1
+    """
     if fn_name == 'addition':
-        return partial(lambda c, x: x + c, params[0])
+        return partial(lambda c, x: x + c * 10 * 5, param)
     elif fn_name == 'multiplication':
-        return partial(lambda c, x: x * c, params[0])
+        return partial(lambda c, x: x * c * 10, param)
     raise ValueError('Invalid function name')
 
 
@@ -163,15 +171,17 @@ if __name__ == '__main__':
 
     print(f'Training {count} models from index {start}')
     nets = [get_subject_net() for _ in range(count)]
-    fns = [get_subject_fn(fn_name, random.random()) for _ in range(count)]
+    parameters = [random.random() for _ in range(count)]
+    fns = [get_subject_fn(fn_name, parameter) for parameter in parameters]
     train_subject_nets(nets, fns, epochs)
 
     print('Evaluating models')
     losses = evaluate_subject_nets(nets, fns)
     metadata = [{
-        "exponent": exponent,
+        "fn_name": fn_name,
+        "parameter": parameter,
         "loss": loss
-    } for exponent, loss in zip(fns, losses)]
+    } for parameter, loss in zip(parameters, losses)]
 
     print('Saving models')
     for i, (net, md) in enumerate(zip(nets, metadata)):
