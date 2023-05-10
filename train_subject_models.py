@@ -168,7 +168,6 @@ if __name__ == '__main__':
     fn_name = sys.argv[5]
     epochs = int(sys.argv[6])
     random.seed(a=seed)
-
     print(f'Training {count} models from index {start}')
     nets = [get_subject_net() for _ in range(count)]
     parameters = [random.random() for _ in range(count)]

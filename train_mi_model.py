@@ -66,7 +66,7 @@ class SubjectModelDataset(Dataset):
         net, metadata = load_subject_model(self.model_path, self.start_idx + idx)
         return torch.concat(
             [param.detach().reshape(-1) for _, param in net.named_parameters()]
-        ), torch.tensor(metadata["exponent"], dtype=torch.float32)
+        ), torch.tensor(metadata["parameter"], dtype=torch.float32)
 
 
 class PositionalEncoding(nn.Module):
@@ -135,13 +135,11 @@ if __name__ == "__main__":
     mi_model = Transformer(
         SUBJECT_MODEL_PARAMETER_COUNT, 1, num_heads=6, hidden_size=240
     ).to(DEVICE)
-    mi_optimizer = torch.optim.Adam(mi_model.parameters(), lr=0.001)
+    mi_optimizer = torch.optim.Adam(mi_model.parameters(), lr=0.00001)
 
     print("training mi transformer", flush=True)
     mi_model.train()
     for epoch in range(MI_EPOCHS):
-        if epoch % 100 == 0:
-            print(f"mi model epoch {epoch} of {MI_EPOCHS}", flush=True)
         for i, (inputs, targets) in enumerate(train_dataloader):
             targets = targets.to(DEVICE)
             mi_optimizer.zero_grad()
@@ -150,21 +148,20 @@ if __name__ == "__main__":
             loss.backward()
             mi_optimizer.step()
 
-    mi_model.eval()
-    test_loss = 0.0
-    with torch.no_grad():
-        for inputs, targets in test_dataloader:
-            targets = targets.to(DEVICE)
-            outputs = mi_model(inputs)
-
-            # print out first batch results as example
-            if test_loss == 0.0:
-                print("first batch from transformer as example", flush=True)
-                print(torch.cat((outputs, targets.unsqueeze(1)), dim=1), flush=True)
-
-            loss = MI_CRITERION(outputs, targets.unsqueeze(1))
-            test_loss += loss.item() * inputs.size(0)
-    avg_loss = test_loss / len(test_dataset)
-
-    print(f"\nTest Loss: {avg_loss:.4f}", flush=True)
+        if epoch % 100 == 0:
+            print(f"mi model epoch {epoch} of {MI_EPOCHS}", flush=True)
+            mi_model.eval()
+            test_loss = 0.0
+            with torch.no_grad():
+                for inputs, targets in test_dataloader:
+                    targets = targets.to(DEVICE)
+                    outputs = mi_model(inputs)
+                    loss = MI_CRITERION(outputs, targets.unsqueeze(1))
+                    test_loss += loss.item() * inputs.size(0)
+            avg_loss = test_loss / len(test_dataset)
+            print(f"\nTest Loss: {avg_loss:.4f}", flush=True)
+    # print out first batch results as example
+    if epoch == MI_EPOCHS:
+        print("Last batch as example", flush=True)
+        print(torch.cat((outputs, targets.unsqueeze(1)), dim=1), flush=True)
     torch.save(mi_model.state_dict(), 'mi_model.pickle')
