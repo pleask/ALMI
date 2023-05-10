@@ -189,5 +189,5 @@ if __name__ == "__main__":
                     loss = MI_CRITERION(outputs, targets.unsqueeze(1))
                     test_loss += loss.item() * inputs.size(0)
             avg_loss = test_loss / len(test_dataset)
-            print(f"Epoch {epoch} of {epochs}. Test Loss: {avg_loss:.4f}", flush=True)
+            print(f"Epoch {epoch+1} of {epochs}. Test Loss: {avg_loss:.4f}", flush=True)
             torch.save(mi_model.state_dict(), model_path)
