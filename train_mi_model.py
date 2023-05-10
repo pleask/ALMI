@@ -1,9 +1,3 @@
-"""
-Trains MI models, ie. the models that recover the labeling function from the subject models.
-
-Takes exactly one argument:
-- subject_path: the directory in which the subject models are saved.
-"""
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -13,16 +7,18 @@ import json
 import math
 import os
 import sys
+import argparse
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 MI_MODEL_TRAIN_SPLIT_RATIO = 0.7
 SUBJECT_MODEL_PARAMETER_COUNT = 726
 MI_CRITERION = nn.MSELoss()
-MI_EPOCHS = 10000
 random.seed(a=0)
 
 # TODO: commonise this with train_subject_models.py
 SUBJECT_LAYER_SIZE = 25
+
+
 def get_subject_net():
     """
     Returns an instance of a subject network. The layer sizes have been tuned
@@ -41,8 +37,8 @@ def get_subject_net():
 def load_subject_model(model_path, model_idx):
     net = get_subject_net()
     # TODO: Commonise these paths across files
-    net.load_state_dict(torch.load(f'{model_path}/{model_idx}.pickle'))
-    with open(f'{model_path}/{model_idx}_metadata.json', "r") as f:
+    net.load_state_dict(torch.load(f"{model_path}/{model_idx}.pickle"))
+    with open(f"{model_path}/{model_idx}_metadata.json", "r") as f:
         metadata = json.load(f)
     return net, metadata
 
@@ -120,9 +116,37 @@ class Transformer(nn.Module):
         return x
 
 
+parser = argparse.ArgumentParser(
+    description="Trains MI models, ie. the models that recover the labeling function from the subject models."
+)
+parser.add_argument(
+    "-s",
+    "--subject_dir",
+    type=str,
+    required=True,
+    help="Directory containing the subject models.",
+)
+parser.add_argument(
+    "-e",
+    "--epochs",
+    type=int,
+    help="Number of epochs for which to train. Will just evaluate the model if zero or unspecified. The loss seems to stop falling around 1k on addition, probably need to experiment for other functions.",
+)
+parser.add_argument(
+    "-m",
+    "--model_path",
+    type=str,
+    help="Optionally load a model to evaluate or continue training.",
+)
+
+
 if __name__ == "__main__":
-    print('Creating subject model dataset', flush=True)
-    subject_dir = sys.argv[1]
+    args = parser.parse_args()
+    subject_dir = args.subject_dir
+    epochs = args.epochs
+    model_path = args.load_model
+
+    print("Creating subject model dataset", flush=True)
     subject_model_count = len(os.listdir(subject_dir)) // 2
     train_split_count = int(MI_MODEL_TRAIN_SPLIT_RATIO * subject_model_count)
     train_dataset = SubjectModelDataset(1, train_split_count, subject_dir)
@@ -137,9 +161,15 @@ if __name__ == "__main__":
     ).to(DEVICE)
     mi_optimizer = torch.optim.Adam(mi_model.parameters(), lr=0.00001)
 
+    if model_path:
+        print("loading existing model", flush=True)
+        mi_model.load_state_dict(torch.load(model_path))
+
     print("training mi transformer", flush=True)
     mi_model.train()
-    for epoch in range(MI_EPOCHS):
+    outputs = None
+    targets = None
+    for epoch in range(epochs):
         for i, (inputs, targets) in enumerate(train_dataloader):
             targets = targets.to(DEVICE)
             mi_optimizer.zero_grad()
@@ -149,7 +179,7 @@ if __name__ == "__main__":
             mi_optimizer.step()
 
         if epoch % 100 == 0:
-            print(f"mi model epoch {epoch} of {MI_EPOCHS}", flush=True)
+            print(f"mi model epoch {epoch} of {epochs}", flush=True)
             mi_model.eval()
             test_loss = 0.0
             with torch.no_grad():
@@ -160,8 +190,6 @@ if __name__ == "__main__":
                     test_loss += loss.item() * inputs.size(0)
             avg_loss = test_loss / len(test_dataset)
             print(f"\nTest Loss: {avg_loss:.4f}", flush=True)
-    # print out first batch results as example
-    if epoch == MI_EPOCHS:
-        print("Last batch as example", flush=True)
-        print(torch.cat((outputs, targets.unsqueeze(1)), dim=1), flush=True)
-    torch.save(mi_model.state_dict(), 'mi_model.pickle')
+    print("Last batch as example", flush=True)
+    print(torch.cat((outputs, targets.unsqueeze(1)), dim=1), flush=True)
+    torch.save(mi_model.state_dict(), "mi_model.pickle")
