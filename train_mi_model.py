@@ -59,10 +59,21 @@ class SubjectModelDataset(Dataset):
 
     # TODO: This is IO heavy, so can probably be parallelised (although actually seems quite fast sooo)
     def __getitem__(self, idx):
+        import time
+        t0 = time.time()
         net, metadata = load_subject_model(self.model_path, self.start_idx + idx)
-        return torch.concat(
+        t1 = time.time()
+        print(f'loading: {t1 - t0}', flush=True)
+        x = torch.concat(
             [param.detach().reshape(-1) for _, param in net.named_parameters()]
-        ), torch.tensor(metadata["parameter"], dtype=torch.float32)
+        )
+        t2 = time.time()
+        print(f'creating x: {t2} - {t1}', flush=True)
+        y = torch.tensor(metadata["parameter"], dtype=torch.float32, device=DEVICE)
+        t3 = time.time()
+        print(f'creating y: {t3} - {t1}', flush=True)
+        raise Exception()
+        return x, y
 
 
 class PositionalEncoding(nn.Module):
@@ -171,7 +182,6 @@ if __name__ == "__main__":
     mi_model.train()
     for epoch in range(epochs):
         for i, (inputs, targets) in enumerate(train_dataloader):
-            targets = targets.to(DEVICE)
             mi_optimizer.zero_grad()
             outputs = mi_model(inputs)
             loss = MI_CRITERION(outputs, targets.unsqueeze(1))
