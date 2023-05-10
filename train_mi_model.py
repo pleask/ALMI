@@ -146,7 +146,7 @@ if __name__ == "__main__":
     epochs = args.epochs
     model_path = args.model_path
 
-    print("Creating subject model dataset", flush=True)
+    print("CREATING DATASET", flush=True)
     subject_model_count = len(os.listdir(subject_dir)) // 2
     train_split_count = int(MI_MODEL_TRAIN_SPLIT_RATIO * subject_model_count)
     train_dataset = SubjectModelDataset(1, train_split_count, subject_dir)
@@ -162,12 +162,12 @@ if __name__ == "__main__":
     mi_optimizer = torch.optim.Adam(mi_model.parameters(), lr=0.00001)
 
     if model_path:
-        print("loading existing model", flush=True)
+        print("LOADING MODEL", flush=True)
         mi_model.load_state_dict(torch.load(model_path))
     else:
         model_path = 'mi_model.pickle'
 
-    print("training mi transformer", flush=True)
+    print("TRAINING", flush=True)
     mi_model.train()
     for epoch in range(epochs):
         for i, (inputs, targets) in enumerate(train_dataloader):
@@ -178,8 +178,8 @@ if __name__ == "__main__":
             loss.backward()
             mi_optimizer.step()
 
-        if epoch % 100 == 0:
-            print(f"mi model epoch {epoch} of {epochs}", flush=True)
+        # after every 10 epochs, evaluate and save the model
+        if epoch % 10 == 9:
             mi_model.eval()
             test_loss = 0.0
             with torch.no_grad():
@@ -189,13 +189,5 @@ if __name__ == "__main__":
                     loss = MI_CRITERION(outputs, targets.unsqueeze(1))
                     test_loss += loss.item() * inputs.size(0)
             avg_loss = test_loss / len(test_dataset)
-            print(f"\nTest Loss: {avg_loss:.4f}", flush=True)
-    print("Last batch as example", flush=True)
-    mi_model.eval()
-    with torch.no_grad():
-        for inputs, targets in test_dataloader:
-            targets = targets.to(DEVICE)
-            outputs = mi_model(inputs)
-            break
-    print(torch.cat((outputs, targets.unsqueeze(1)), dim=1), flush=True)
-    torch.save(mi_model.state_dict(), model_path)
+            print(f"Epoch {epoch} of {epochs}. Test Loss: {avg_loss:.4f}", flush=True)
+            torch.save(mi_model.state_dict(), model_path)
