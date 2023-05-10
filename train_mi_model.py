@@ -164,6 +164,8 @@ if __name__ == "__main__":
     if model_path:
         print("loading existing model", flush=True)
         mi_model.load_state_dict(torch.load(model_path))
+    else:
+        model_path = 'mi_model.pickle'
 
     print("training mi transformer", flush=True)
     mi_model.train()
@@ -192,4 +194,4 @@ if __name__ == "__main__":
             print(f"\nTest Loss: {avg_loss:.4f}", flush=True)
     print("Last batch as example", flush=True)
     print(torch.cat((outputs, targets.unsqueeze(1)), dim=1), flush=True)
-    torch.save(mi_model.state_dict(), "mi_model.pickle")
+    torch.save(mi_model.state_dict(), model_path)
