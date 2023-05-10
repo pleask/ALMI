@@ -144,7 +144,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     subject_dir = args.subject_dir
     epochs = args.epochs
-    model_path = args.load_model
+    model_path = args.model_path
 
     print("Creating subject model dataset", flush=True)
     subject_model_count = len(os.listdir(subject_dir)) // 2
@@ -169,8 +169,6 @@ if __name__ == "__main__":
 
     print("training mi transformer", flush=True)
     mi_model.train()
-    outputs = None
-    targets = None
     for epoch in range(epochs):
         for i, (inputs, targets) in enumerate(train_dataloader):
             targets = targets.to(DEVICE)
@@ -193,5 +191,11 @@ if __name__ == "__main__":
             avg_loss = test_loss / len(test_dataset)
             print(f"\nTest Loss: {avg_loss:.4f}", flush=True)
     print("Last batch as example", flush=True)
+    mi_model.eval()
+    with torch.no_grad():
+        for inputs, targets in test_dataloader:
+            targets = targets.to(DEVICE)
+            outputs = mi_model(inputs)
+            break
     print(torch.cat((outputs, targets.unsqueeze(1)), dim=1), flush=True)
     torch.save(mi_model.state_dict(), model_path)
