@@ -190,3 +190,11 @@ if __name__ == "__main__":
             avg_loss = test_loss / len(test_dataset)
             print(f"Epoch {epoch+1} of {epochs}. Test Loss: {avg_loss:.4f}", flush=True)
             torch.save(mi_model.state_dict(), model_path)
+
+    print("PREDICTION SAMPLE", flush=True)
+    mi_model.eval()
+    with torch.no_grad():
+        for inputs, targets in test_dataloader:
+            outputs = mi_model(inputs)
+            [print(t.detach().cpu().item(), o.detach().cpu().item()) for t, o in zip(targets, outputs.squeeze())]
+            break
