@@ -50,29 +50,18 @@ class SubjectModelDataset(Dataset):
         can be used in this dataset [start_idx, end_idx]. The models are indexed from
         1, so an example input here would be start_idx=1 end_idx=50.
         """
-        self.start_idx = start_idx
-        self.end_idx = end_idx
         self.model_path = model_path
+        self.data = [load_subject_model(self.model_path, idx) for idx in range(start_idx, end_idx)]
 
     def __len__(self):
-        return self.end_idx - self.start_idx + 1
+        return len(self.data)
 
-    # TODO: This is IO heavy, so can probably be parallelised (although actually seems quite fast sooo)
     def __getitem__(self, idx):
-        import time
-        t0 = time.time()
-        net, metadata = load_subject_model(self.model_path, self.start_idx + idx)
-        t1 = time.time()
-        print(f'loading: {t1 - t0}', flush=True)
+        net, metadata = self.data[idx]
         x = torch.concat(
             [param.detach().reshape(-1) for _, param in net.named_parameters()]
         )
-        t2 = time.time()
-        print(f'creating x: {t2} - {t1}', flush=True)
         y = torch.tensor(metadata["parameter"], dtype=torch.float32, device=DEVICE)
-        t3 = time.time()
-        print(f'creating y: {t3} - {t1}', flush=True)
-        raise Exception()
         return x, y
 
 
