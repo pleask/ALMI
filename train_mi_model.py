@@ -52,7 +52,19 @@ class SubjectModelDataset(Dataset):
         """
         self.model_path = model_path
         self.start_idx = start_idx
-        self.data = [load_subject_model(self.model_path, idx) for idx in range(start_idx, end_idx)]
+        self.data = self._load_data(model_path, start_idx, end_idx)
+
+    @staticmethod
+    def _load_data(model_path, start_idx, end_idx):
+        data = []
+        for i in range(start_idx, end_idx):
+            net, metadata = load_subject_model(model_path, i)
+            # filter out models with a high loss
+            if metadata['loss'] > 0.00001:
+                continue
+            data.append((i, net, metadata))
+        return data 
+
 
     def __len__(self):
         return len(self.data)
@@ -197,5 +209,5 @@ if __name__ == "__main__":
     with torch.no_grad():
         for inputs, targets in test_dataloader:
             outputs = mi_model(inputs)
-            [print(test_dataset.start_idx + i, t.detach().cpu().item(), o.detach().cpu().item()) for i, (t, o) in enumerate(zip(targets, outputs.squeeze()))]
+            [print(test_dataset.start_idx + i, t.detach().cpu().item(), o.detach().cpu().item()) for (i, t, o) in zip(targets, outputs.squeeze())]
             break
