@@ -159,26 +159,27 @@ def get_subject_fn(fn_name, param):
 parser = argparse.ArgumentParser(
     description="Trains subject models, ie. the models that implement the labeling function."
 )
-parser.add_argument("load_model_idx", type=str, help="Model to evaluate. If specified no training will happen.")
-parser.add_argument("path", type=str, help="Directory to which to save the models")
-parser.add_argument("start", type=int, help="From which model index to start training.")
+parser.add_argument("--load_model_idx", type=str, help="Model to evaluate. If specified no training will happen.")
+parser.add_argument("--path", type=str, help="Directory to which to save the models")
+parser.add_argument("--start", type=int, help="From which model index to start training.")
 parser.add_argument(
-    "count",
+    "--count",
     type=int,
     help="The number of models to train in parallel on the single GPU. Currently think this should be around 5, but this might depend on the GPU.",
+    required=False,
 )
 parser.add_argument(
-    "seed",
+    "--seed",
     type=int,
     help="The random seed to use. Should be different for all runs of this script within an experiment, and the same for each run across experiments.",
 )
 parser.add_argument(
-    "fn_name",
+    "--fn_name",
     type=str,
     help='The function to train the subject nets on. Eg. "addition" for addition.',
 )
 parser.add_argument(
-    "epochs", type=int, help="The number of epochs for which to train the models."
+    "--epochs", type=int, help="The number of epochs for which to train the models."
 )
 
 get_model_path = lambda path, net_idx: f"{path}/{net_idx}.pickle"
@@ -193,16 +194,16 @@ if __name__ == "__main__":
     count = args.count
     seed = args.seed
     fn_name = args.fn_name
-    epochs = args.epoch
+    epochs = args.epochs
     random.seed(a=seed)
 
     # TODO: This should just be a separate script. Need to commonise stuff first.
     if load_model_idx:
         net = get_subject_net()
-        net = net.load_state_dict(torch.load(get_model_path(path, load_model_idx)))
+        net.load_state_dict(torch.load(get_model_path(path, load_model_idx)))
         with open(get_metadata_path(path, load_model_idx), 'r') as f:
             metadata = json.load(f)
-        print(f'Function: {metadata['fn_name']}; parameter: {metadata['parameter']}')
+        print(f'Function: {metadata["fn_name"]}; parameter: {metadata["parameter"]}; loss: {metadata["loss"]}')
         fn = get_subject_fn(metadata['fn_name'], metadata['parameter'])
         evaluate_subject_nets([net], [fn])
     else:
