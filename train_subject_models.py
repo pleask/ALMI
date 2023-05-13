@@ -1,22 +1,10 @@
-"""
-Trains subject models, ie. the models that implement the labeling function.
-
-Takes exactly three arguments:
-- path: directory to which to save the models.
-- start: from which model index to start training.
-- count: the number of models to train in parallel on the single GPU. Currently
-  think this should be around 5, but this might depend on the GPU.
-- seed: the random seed to use. Should be different for all runs of this script
-  within an experiment, and the same for each run across experiments.
-- fn: the function to train the subject nets on. Eg. 'addition' for addition.
-- epochs: the number of epochs for which to train the models.
-"""
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import sys
 import random
 import json
+import argparse
 from functools import partial
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -109,7 +97,7 @@ def train_subject_nets(nets, fns, epochs):
     parallel_nets = [nn.DataParallel(net) for net in nets]
     for epoch in range(epochs):
         if epoch % 1000 == 0:
-            print(f'Epoch {epoch} of {epochs}', flush=True)
+            print(f"Epoch {epoch} of {epochs}", flush=True)
         for batch_idx in range(len(training_data)):
             for net, data, optimizer in zip(parallel_nets, training_data, optimizers):
                 optimizer.zero_grad()
@@ -136,9 +124,11 @@ def evaluate_subject_nets(nets, fns):
         loss = SUBJECT_CRITERION(outputs, labels).detach().cpu().item()
         losses.append(loss)
 
-
-    print('SAMPLE PREDICTIONS (label, prediction)', flush=True)
-    [print(l.detach().cpu().item(), o.detach().cpu().item(), flush=True) for l, o in zip(labels.squeeze()[:10], outputs.squeeze()[:10])]
+    print("SAMPLE PREDICTIONS (label, prediction)", flush=True)
+    [
+        print(l.detach().cpu().item(), o.detach().cpu().item(), flush=True)
+        for l, o in zip(labels.squeeze()[:10], outputs.squeeze()[:10])
+    ]
     print()
 
     return losses
@@ -159,40 +149,81 @@ def get_subject_fn(fn_name, param):
     fn_name: the name of the function
     param: a float between 0 and 1
     """
-    if fn_name == 'addition':
+    if fn_name == "addition":
         return partial(lambda c, x: x + c * 10 * 5, param)
-    elif fn_name == 'multiplication':
+    elif fn_name == "multiplication":
         return partial(lambda c, x: x * c * 10, param)
-    raise ValueError('Invalid function name')
+    raise ValueError("Invalid function name")
 
 
-if __name__ == '__main__':
-    path = sys.argv[1]
-    start = int(sys.argv[2])
-    count = int(sys.argv[3])
-    seed = int(sys.argv[4])
-    fn_name = sys.argv[5]
-    epochs = int(sys.argv[6])
+parser = argparse.ArgumentParser(
+    description="Trains subject models, ie. the models that implement the labeling function."
+)
+parser.add_argument("load_model_idx", type=str, help="Model to evaluate. If specified no training will happen.")
+parser.add_argument("path", type=str, help="Directory to which to save the models")
+parser.add_argument("start", type=int, help="From which model index to start training.")
+parser.add_argument(
+    "count",
+    type=int,
+    help="The number of models to train in parallel on the single GPU. Currently think this should be around 5, but this might depend on the GPU.",
+)
+parser.add_argument(
+    "seed",
+    type=int,
+    help="The random seed to use. Should be different for all runs of this script within an experiment, and the same for each run across experiments.",
+)
+parser.add_argument(
+    "fn_name",
+    type=str,
+    help='The function to train the subject nets on. Eg. "addition" for addition.',
+)
+parser.add_argument(
+    "epochs", type=int, help="The number of epochs for which to train the models."
+)
+
+get_model_path = lambda path, net_idx: f"{path}/{net_idx}.pickle"
+get_metadata_path = lambda path, net_idx: f"{path}/{net_idx}_metadata.json"
+
+if __name__ == "__main__":
+    print('Parsing args')
+    args = parser.parse_args()
+    load_model_idx = args.load_model_idx
+    path = args.path
+    start = args.start
+    count = args.count
+    seed = args.seed
+    fn_name = args.fn_name
+    epochs = args.epoch
     random.seed(a=seed)
-    print(f'Training {count} models from index {start}')
-    nets = [get_subject_net() for _ in range(count)]
-    parameters = [random.random() for _ in range(count)]
-    fns = [get_subject_fn(fn_name, parameter) for parameter in parameters]
-    train_subject_nets(nets, fns, epochs)
 
-    print('Evaluating models')
-    losses = evaluate_subject_nets(nets, fns)
-    metadata = [{
-        "fn_name": fn_name,
-        "parameter": parameter,
-        "loss": loss
-    } for parameter, loss in zip(parameters, losses)]
+    # TODO: This should just be a separate script. Need to commonise stuff first.
+    if load_model_idx:
+        net = get_subject_net()
+        net = net.load_state_dict(torch.load(get_model_path(path, load_model_idx)))
+        with open(get_metadata_path(path, load_model_idx), 'r') as f:
+            metadata = json.load(f)
+        print(f'Function: {metadata['fn_name']}; parameter: {metadata['parameter']}')
+        fn = get_subject_fn(metadata['fn_name'], metadata['parameter'])
+        evaluate_subject_nets([net], [fn])
+    else:
+        print(f"Training {count} models from index {start}")
+        nets = [get_subject_net() for _ in range(count)]
+        parameters = [random.random() for _ in range(count)]
+        fns = [get_subject_fn(fn_name, parameter) for parameter in parameters]
+        train_subject_nets(nets, fns, epochs)
 
-    print('Saving models')
-    for i, (net, md) in enumerate(zip(nets, metadata)):
-        net_idx = start + i
-        model_path = f'{path}/{net_idx}.pickle'
-        md_path = f'{path}/{net_idx}_metadata.json'
-        torch.save(net.state_dict(), model_path)
-        with open(md_path, "w") as json_file:
-            json.dump(md, json_file)
+        print("Evaluating models")
+        losses = evaluate_subject_nets(nets, fns)
+        metadata = [
+            {"fn_name": fn_name, "parameter": parameter, "loss": loss}
+            for parameter, loss in zip(parameters, losses)
+        ]
+
+        print("Saving models")
+        for i, (net, md) in enumerate(zip(nets, metadata)):
+            net_idx = start + i
+            model_path = get_model_path(path, net_idx) 
+            md_path = get_metadata_path(path, net_idx)
+            torch.save(net.state_dict(), model_path)
+            with open(md_path, "w") as json_file:
+                json.dump(md, json_file)
