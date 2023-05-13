@@ -51,6 +51,7 @@ class SubjectModelDataset(Dataset):
         1, so an example input here would be start_idx=1 end_idx=50.
         """
         self.model_path = model_path
+        self.start_idx = start_idx
         self.data = [load_subject_model(self.model_path, idx) for idx in range(start_idx, end_idx)]
 
     def __len__(self):
@@ -196,5 +197,5 @@ if __name__ == "__main__":
     with torch.no_grad():
         for inputs, targets in test_dataloader:
             outputs = mi_model(inputs)
-            [print(t.detach().cpu().item(), o.detach().cpu().item()) for t, o in zip(targets, outputs.squeeze())]
+            [print(test_dataset.start_idx + i, t.detach().cpu().item(), o.detach().cpu().item()) for i, (t, o) in enumerate(zip(targets, outputs.squeeze()))]
             break

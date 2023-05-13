@@ -135,6 +135,12 @@ def evaluate_subject_nets(nets, fns):
             outputs = net(inputs)
         loss = SUBJECT_CRITERION(outputs, labels).detach().cpu().item()
         losses.append(loss)
+
+
+    print('SAMPLE PREDICTIONS (label, prediction)', flush=True)
+    [print(l.detach().cpu().item(), o.detach().cpu().item(), flush=True) for l, o in zip(labels.squeeze()[:10], outputs.squeeze()[:10])]
+    print()
+
     return losses
 
 
