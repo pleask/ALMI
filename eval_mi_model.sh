@@ -10,4 +10,4 @@ source /etc/profile
 module load cuda/11.7
 
 source /home2/wclv88/bounding-mi/bounding-mi/bin/activate
-stdbuf -oL /home2/wclv88/bounding-mi/bounding-mi/bin/python train_mi_model.py -s subject_models -e 1000 
+stdbuf -oL /home2/wclv88/bounding-mi/bounding-mi/bin/python train_mi_model.py -s subject_models -e 0 -m mi_model.pickle

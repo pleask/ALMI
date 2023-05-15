@@ -10,7 +10,7 @@ for file_name in os.listdir('subject_models'):
     with open(f'subject_models/{file_name}', 'r') as f:
         j = json.load(f)
     loss = float(j['loss'])
-    if loss < 0.00001:
+    if loss < 0.000001:
         losses.append(float(j['loss']))
 
 counts, bin_edges = np.histogram(losses)

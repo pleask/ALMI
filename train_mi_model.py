@@ -60,17 +60,22 @@ class SubjectModelDataset(Dataset):
         for i in range(start_idx, end_idx):
             net, metadata = load_subject_model(model_path, i)
             # filter out models with a high loss
-            if metadata['loss'] > 0.00001:
+            if metadata['loss'] > 0.000001:
                 continue
             data.append((i, net, metadata))
         return data 
 
+    def get_dataset_index(self, i):
+        """
+        Retrieve the index for the whole dataset from the index for this subset.
+        """
+        return self.start_idx + self.data[i][0]
 
     def __len__(self):
         return len(self.data)
 
     def __getitem__(self, idx):
-        net, metadata = self.data[idx]
+        _, net, metadata = self.data[idx]
         x = torch.concat(
             [param.detach().reshape(-1) for _, param in net.named_parameters()]
         )
@@ -209,5 +214,5 @@ if __name__ == "__main__":
     with torch.no_grad():
         for inputs, targets in test_dataloader:
             outputs = mi_model(inputs)
-            [print(test_dataset.start_idx + i, t.detach().cpu().item(), o.detach().cpu().item()) for (i, t, o) in zip(targets, outputs.squeeze())]
+            [print(test_dataset.get_dataset_index(i), t.detach().cpu().item(), o.detach().cpu().item()) for i, (t, o) in enumerate(zip(targets, outputs.squeeze()))]
             break
