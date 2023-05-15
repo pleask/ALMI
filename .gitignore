@@ -1,5 +1,2 @@
 bounding-mi/
-outs/
-subject_models/
-*.pickle
-*.out
+experiments/
