@@ -8,8 +8,8 @@
 #SBATCH --array=1-2000
 #SBATCH -o experiments/%x/outs/%a.out
 
-f=addition
-epochs=10000
+f=$1
+epochs=$2
 dir=experiments/$SLURM_JOB_NAME
 
 source /etc/profile
