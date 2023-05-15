@@ -4,7 +4,7 @@ mkdir $dir
 mkdir $dir/outs
 mkdir $dir/subject_models
 
-f='addition'
+f=$1
 epochs=10000
 echo "date: $(date)" >> $dir/metadata.txt
 echo "function: $f" >> $dir/metadata.txt
