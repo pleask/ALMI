@@ -6,16 +6,11 @@
 #SBATCH --qos=short
 #SBATCH --time=0-00:10:00
 #SBATCH --array=1-2000
-#SBATCH -o experiments/%A/outs/%a.out
+#SBATCH -o experiments/%x/outs/%a.out
 
 f=addition
 epochs=10000
-
-dir=experiments/$SLURM_JOB_ID
-mkdir $dir
-mkdir $dir/outs
-mkdir $dir/subject_models
-echo "function: $f epochs: $epochs" >> $SLURM_JOB_ID/metadata.txt
+dir=experiments/$SLURM_JOB_NAME
 
 source /etc/profile
 module load cuda/11.7
