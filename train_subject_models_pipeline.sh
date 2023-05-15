@@ -5,7 +5,7 @@ mkdir $dir/outs
 mkdir $dir/subject_models
 
 f='addition'
-epochs='epochs'
+epochs=10000
 echo "date: $(date) function: $f epochs: $epochs" >> $dir/metadata.txt
 
 sbatch --job-name=$job_name train_subject_models.sh $f $epochs
