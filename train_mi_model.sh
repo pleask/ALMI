@@ -5,9 +5,11 @@
 #SBATCH -p res-gpu-small
 #SBATCH --qos=short
 #SBATCH --time=2-00:00:00
+epochs=1000
+echo "MI epochs: $epochs" >> $1/metadata.txt
 
 source /etc/profile
 module load cuda/11.7
 
 source /home2/wclv88/bounding-mi/bounding-mi/bin/activate
-stdbuf -oL /home2/wclv88/bounding-mi/bounding-mi/bin/python train_mi_model.py -s subject_models -e 1000 
+stdbuf -oL /home2/wclv88/bounding-mi/bounding-mi/bin/python train_mi_model.py -d $1 -e $epochs 

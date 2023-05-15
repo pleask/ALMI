@@ -138,8 +138,8 @@ parser = argparse.ArgumentParser(
     description="Trains MI models, ie. the models that recover the labeling function from the subject models."
 )
 parser.add_argument(
-    "-s",
-    "--subject_dir",
+    "-d",
+    "--dir",
     type=str,
     required=True,
     help="Directory containing the subject models.",
@@ -150,6 +150,7 @@ parser.add_argument(
     type=int,
     help="Number of epochs for which to train. Will just evaluate the model if zero or unspecified. The loss seems to stop falling around 1k on addition, probably need to experiment for other functions.",
 )
+# TODO: replace this with a check to see if there's already a model there, and a flag to overwrite
 parser.add_argument(
     "-m",
     "--model_path",
@@ -160,9 +161,10 @@ parser.add_argument(
 
 if __name__ == "__main__":
     args = parser.parse_args()
-    subject_dir = args.subject_dir
     epochs = args.epochs
+    dir = args.dir
     model_path = args.model_path
+    subject_dir = f'{dir}/subject_models'
 
     print("CREATING DATASET", flush=True)
     subject_model_count = len(os.listdir(subject_dir)) // 2
