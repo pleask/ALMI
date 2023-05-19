@@ -153,7 +153,14 @@ def get_subject_fn(fn_name, param):
         return partial(lambda c, x: x + c * 10 * 5, param)
     elif fn_name == "multiplication":
         return partial(lambda c, x: x * c * 10, param)
-    raise ValueError("Invalid function name")
+    elif fn_name == "sigmoid":
+        return partial(lambda c, x: 20*(1/(1+torch.exp(-(x+c)))-0.5), param)
+    elif fn_name == 'exponent':
+        return partial(lambda c, x: x ** (c / 2), param)
+    elif fn_name == 'min':
+        return partial(lambda c, x: torch.min(c, x), param)
+    else:
+        raise ValueError("Invalid function name")
 
 
 parser = argparse.ArgumentParser(
