@@ -185,7 +185,7 @@ if __name__ == "__main__":
         print("LOADING MODEL", flush=True)
         mi_model.load_state_dict(torch.load(model_path))
     else:
-        model_path = 'mi_model.pickle'
+        model_path = f'{dir}/mi_model.pickle'
 
     print("TRAINING", flush=True)
     mi_model.train()
