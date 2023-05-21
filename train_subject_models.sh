@@ -5,7 +5,7 @@
 #SBATCH -p res-gpu-small
 #SBATCH --qos=short
 #SBATCH --time=0-00:10:00
-#SBATCH --array=1-2000
+#SBATCH --array=0-2000
 #SBATCH -o experiments/%x/outs/%a.out
 
 f=$1

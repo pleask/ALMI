@@ -158,7 +158,7 @@ def get_subject_fn(fn_name, param):
     elif fn_name == 'exponent':
         return partial(lambda c, x: x ** (c / 2), param)
     elif fn_name == 'min':
-        return partial(lambda c, x: torch.min(c, x), param)
+        return partial(lambda c, x: torch.min(torch.full_like(x, c), x), param)
     else:
         raise ValueError("Invalid function name")
 

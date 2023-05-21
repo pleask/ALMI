@@ -60,7 +60,7 @@ class SubjectModelDataset(Dataset):
         for i in range(start_idx, end_idx):
             net, metadata = load_subject_model(model_path, i)
             # filter out models with a high loss
-            if metadata['loss'] > 0.000001:
+            if metadata['loss'] > 0.00001:
                 continue
             data.append((i, net, metadata))
         return data 
