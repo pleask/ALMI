@@ -1,2 +1,4 @@
 bounding-mi/
 experiments/
+__pycache__/
+*.out

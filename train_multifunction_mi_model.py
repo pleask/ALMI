@@ -8,7 +8,7 @@ import random
 import torch
 from torch.utils.data import Dataset, DataLoader
 
-from .train_mi_model import get_subject_net, load_subject_model, SubjectModelDataset, DEVICE, MI_MODEL_TRAIN_SPLIT_RATIO, SUBJECT_MODEL_PARAMETER_COUNT, MI_CRITERION, SUBJECT_LAYER_SIZE, get_subject_model_dataloaders, Transformer, train_model
+from train_mi_model import get_subject_net, load_subject_model, SubjectModelDataset, DEVICE, MI_MODEL_TRAIN_SPLIT_RATIO, SUBJECT_MODEL_PARAMETER_COUNT, MI_CRITERION, SUBJECT_LAYER_SIZE, get_subject_model_dataloaders, Transformer, train_model, evaluate_model
 
 random.seed(a=0)
 
@@ -61,22 +61,25 @@ parser.add_argument(
     "-m",
     "--model_path",
     type=str,
-    help="Optionally load a model to evaluate or continue training.",
+    help="filename for output model",
 )
 
 if __name__ == '__main__':
     args = parser.parse_args()
     
-    print("CREATING DATALOADERS")
+    print("CREATING DATALOADERS", flush=True)
     function_dataloaders = [get_subject_model_dataloaders(subject_dir) for subject_dir in args.model_folders]
     train_dataset = MultifunctionSubjectModelDataset(dl[0] for dl in function_dataloaders)
     train_dataloader = DataLoader(train_dataset, batch_size=20, shuffle=True)
     test_dataset = MultifunctionSubjectModelDataset(dl[1] for dl in function_dataloaders)
     test_dataloader = DataLoader(test_dataset, batch_size=20, shuffle=True)
 
-    print("CREATING MODEL")
+    print("CREATING MODEL", flush=True)
     model = Transformer(SUBJECT_MODEL_PARAMETER_COUNT, 6, num_heads=6, hidden_size=240)
     optimizer = torch.optim.Adam(model.parameters(), lr=0.00001)
 
-    print("TRAINING MODEL")
+    print("TRAINING MODEL", flush=True)
     train_model(model, args.model_path, optimizer, train_dataloader, test_dataloader, test_dataset)
+
+    print("PREDICTION SAMPLE", flush=True)
+    evaluate_model(mi_model, test_dataloader, test_dataset)
