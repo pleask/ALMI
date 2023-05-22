@@ -1,12 +1,10 @@
 import torch
 import torch.nn as nn
-import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
 import random
 import json
 import math
 import os
-import sys
 import argparse
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -134,6 +132,52 @@ class Transformer(nn.Module):
         return x
 
 
+def get_subject_model_dataloaders(subject_dir):
+    subject_model_count = len(os.listdir(subject_dir)) // 2
+    train_split_count = int(MI_MODEL_TRAIN_SPLIT_RATIO * subject_model_count)
+    train_dataset = SubjectModelDataset(1, train_split_count, subject_dir)
+    test_dataset = SubjectModelDataset(
+        train_split_count + 1, subject_model_count, subject_dir
+    )
+    train_dataloader = DataLoader(train_dataset, batch_size=20, shuffle=True)
+    test_dataloader = DataLoader(test_dataset, batch_size=20, shuffle=True)
+    return train_dataloader, test_dataloader, test_dataset
+
+
+def train_model(model, model_path, optimizer, train_dataloader, test_dataloader, test_dataset):
+    model.train()
+    for epoch in range(epochs):
+        for i, (inputs, targets) in enumerate(train_dataloader):
+            optimizer.zero_grad()
+            outputs = model(inputs)
+            loss = MI_CRITERION(outputs, targets.unsqueeze(1))
+            loss.backward()
+            optimizer.step()
+
+        # after every 10 epochs, evaluate and save the model
+        if epoch % 10 == 9:
+            model.eval()
+            test_loss = 0.0
+            with torch.no_grad():
+                for inputs, targets in test_dataloader:
+                    targets = targets.to(DEVICE)
+                    outputs = model(inputs)
+                    loss = MI_CRITERION(outputs, targets.unsqueeze(1))
+                    test_loss += loss.item() * inputs.size(0)
+            avg_loss = test_loss / len(test_dataset)
+            print(f"Epoch {epoch+1} of {epochs}. Test Loss: {avg_loss:.4f}", flush=True)
+            torch.save(model.state_dict(), model_path)
+
+
+def evaluate_model(model, test_dataloader, test_dataset):
+    model.eval()
+    with torch.no_grad():
+        for inputs, targets in test_dataloader:
+            outputs = model(inputs)
+            [print(test_dataset.get_dataset_index(i), t.detach().cpu().item(), o.detach().cpu().item()) for i, (t, o) in enumerate(zip(targets, outputs.squeeze()))]
+            break
+
+
 parser = argparse.ArgumentParser(
     description="Trains MI models, ie. the models that recover the labeling function from the subject models."
 )
@@ -167,14 +211,7 @@ if __name__ == "__main__":
     subject_dir = f'{dir}/subject_models'
 
     print("CREATING DATASET", flush=True)
-    subject_model_count = len(os.listdir(subject_dir)) // 2
-    train_split_count = int(MI_MODEL_TRAIN_SPLIT_RATIO * subject_model_count)
-    train_dataset = SubjectModelDataset(1, train_split_count, subject_dir)
-    test_dataset = SubjectModelDataset(
-        train_split_count + 1, subject_model_count, subject_dir
-    )
-    train_dataloader = DataLoader(train_dataset, batch_size=20, shuffle=True)
-    test_dataloader = DataLoader(test_dataset, batch_size=20, shuffle=True)
+    train_dataloader, test_dataloader, test_dataset = get_subject_model_dataloaders(subject_dir)
 
     mi_model = Transformer(
         SUBJECT_MODEL_PARAMETER_COUNT, 1, num_heads=6, hidden_size=240
@@ -188,33 +225,7 @@ if __name__ == "__main__":
         model_path = f'{dir}/mi_model.pickle'
 
     print("TRAINING", flush=True)
-    mi_model.train()
-    for epoch in range(epochs):
-        for i, (inputs, targets) in enumerate(train_dataloader):
-            mi_optimizer.zero_grad()
-            outputs = mi_model(inputs)
-            loss = MI_CRITERION(outputs, targets.unsqueeze(1))
-            loss.backward()
-            mi_optimizer.step()
-
-        # after every 10 epochs, evaluate and save the model
-        if epoch % 10 == 9:
-            mi_model.eval()
-            test_loss = 0.0
-            with torch.no_grad():
-                for inputs, targets in test_dataloader:
-                    targets = targets.to(DEVICE)
-                    outputs = mi_model(inputs)
-                    loss = MI_CRITERION(outputs, targets.unsqueeze(1))
-                    test_loss += loss.item() * inputs.size(0)
-            avg_loss = test_loss / len(test_dataset)
-            print(f"Epoch {epoch+1} of {epochs}. Test Loss: {avg_loss:.4f}", flush=True)
-            torch.save(mi_model.state_dict(), model_path)
+    train_model(mi_model, model_path, mi_optimizer, train_dataloader, test_dataloader, test_dataset)
 
     print("PREDICTION SAMPLE", flush=True)
-    mi_model.eval()
-    with torch.no_grad():
-        for inputs, targets in test_dataloader:
-            outputs = mi_model(inputs)
-            [print(test_dataset.get_dataset_index(i), t.detach().cpu().item(), o.detach().cpu().item()) for i, (t, o) in enumerate(zip(targets, outputs.squeeze()))]
-            break
+    evaluate_model(mi_model, test_dataloader, test_dataset)
