@@ -160,7 +160,7 @@ def get_subject_fn(fn_name, param):
     elif fn_name == 'min':
         return partial(lambda c, x: torch.min(torch.full_like(x, c), x), param)
     else:
-        raise ValueError("Invalid function name")
+        raise ValueError(f'Invalid function name: {fn_name}')
 
 
 parser = argparse.ArgumentParser(
