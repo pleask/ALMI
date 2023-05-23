@@ -168,6 +168,7 @@ class MultifunctionSubjectModelDataset(Dataset):
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--subject_model_dir", help="Folder containing the subject models")
+parser.add_argument("--model_path", type=str, help="Path to save this model")
 parser.add_argument(
     "--epochs",
     type=int,
