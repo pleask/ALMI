@@ -3,3 +3,4 @@ experiments/
 __pycache__/
 *.out
 *.pickle
+subject_models/

@@ -185,7 +185,7 @@ parser.add_argument(
     "--epochs", type=int, help="The number of epochs for which to train the models."
 )
 parser.add_argument(
-    "--weight_decay", type=int, help="Weight decay for the adam optimiser."
+    "--weight_decay", type=float, help="Weight decay for the adam optimiser."
 )
 
 get_model_path = lambda path, net_idx: f"{path}/{net_idx}.pickle"
