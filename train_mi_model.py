@@ -141,10 +141,10 @@ def get_subject_model_dataloaders(subject_dir):
     )
     train_dataloader = DataLoader(train_dataset, batch_size=20, shuffle=True)
     test_dataloader = DataLoader(test_dataset, batch_size=20, shuffle=True)
-    return train_dataloader, test_dataloader, test_dataset
+    return train_dataloader, test_dataloader, train_dataset, test_dataset
 
 
-def train_model(model, model_path, optimizer, train_dataloader, test_dataloader, test_dataset):
+def train_model(model, model_path, optimizer, epochs, train_dataloader, test_dataloader, test_dataset):
     model.train()
     for epoch in range(epochs):
         for i, (inputs, targets) in enumerate(train_dataloader):
@@ -174,7 +174,7 @@ def evaluate_model(model, test_dataloader, test_dataset):
     with torch.no_grad():
         for inputs, targets in test_dataloader:
             outputs = model(inputs)
-            [print(test_dataset.get_dataset_index(i), t.detach().cpu().item(), o.detach().cpu().item()) for i, (t, o) in enumerate(zip(targets, outputs.squeeze()))]
+            [print(test_dataset.get_dataset_index(i), t.detach().cpu(), o.detach().cpu()) for i, (t, o) in enumerate(zip(targets, outputs.squeeze()))]
             break
 
 
@@ -211,7 +211,7 @@ if __name__ == "__main__":
     subject_dir = f'{dir}/subject_models'
 
     print("CREATING DATASET", flush=True)
-    train_dataloader, test_dataloader, test_dataset = get_subject_model_dataloaders(subject_dir)
+    train_dataloader, test_dataloader, train_dataset, test_dataset = get_subject_model_dataloaders(subject_dir)
 
     mi_model = Transformer(
         SUBJECT_MODEL_PARAMETER_COUNT, 1, num_heads=6, hidden_size=240
@@ -225,7 +225,7 @@ if __name__ == "__main__":
         model_path = f'{dir}/mi_model.pickle'
 
     print("TRAINING", flush=True)
-    train_model(mi_model, model_path, mi_optimizer, train_dataloader, test_dataloader, test_dataset)
+    train_model(mi_model, model_path, mi_optimizer, args.epochs, train_dataloader, test_dataloader, test_dataset)
 
     print("PREDICTION SAMPLE", flush=True)
     evaluate_model(mi_model, test_dataloader, test_dataset)
