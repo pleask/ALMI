@@ -4,7 +4,7 @@ for function in "${functions[@]}"
 do
     for weight_decay in "${weight_decays[@]}"
     do
-	echo $function $weight_decay
+        echo $function $weight_decay
         sbatch --array=0-2000 train_subject_models.sh $function $weight_decay
     done
 done

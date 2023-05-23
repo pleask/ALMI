@@ -35,15 +35,6 @@ of networks in parallel on the same GPU.
 """
 SUBJECT_BATCH_SIZE = 2**15
 SUBJECT_CRITERION = nn.MSELoss()
-"""
-Absolutely no idea how many we will need here, suggest starting with 10k and
-going from there. Using 100 seemed to result in the mi model not learning, but
-on that run the subject models had only been trained for 100 epochs rather than
-10k so it's possible there just wasn't any signal to learn.
-"""
-TOTAL_SUBJECT_MODELS = 100
-# Path at which to store the subject models
-SUBJECT_MODEL_PATH = "./subject_models"
 
 
 get_exponent = lambda: random.random() * 10.0
@@ -132,10 +123,6 @@ def evaluate_subject_nets(nets, fns):
     print()
 
     return losses
-
-
-get_subject_model_path = lambda i: f"{SUBJECT_MODEL_PATH}/{i}.pickle"
-get_subject_model_metadata_path = lambda i: f"{SUBJECT_MODEL_PATH}/{i}_metadata.json"
 
 
 def get_subject_fn(fn_name, param):
