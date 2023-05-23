@@ -1,10 +1,10 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import sys
 import random
 import json
 import argparse
+import uuid
 from functools import partial
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -77,7 +77,7 @@ def get_subject_net():
     ).to(DEVICE)
 
 
-def train_subject_nets(nets, fns, epochs):
+def train_subject_nets(nets, fns, epochs, weight_decay=0):
     """
     Trains subject networks in parallel. From brief testing it seems 5 subject nets
     can be trained in parallel, but it's up to the client to check this.
@@ -92,7 +92,7 @@ def train_subject_nets(nets, fns, epochs):
     10000 epochs achieved avg loss of 0.28002771735191345
     Also ran this for 20k epochs and the performance was not better than 10k
     """
-    optimizers = [optim.Adam(net.parameters(), lr=0.01) for net in nets]
+    optimizers = [optim.Adam(net.parameters(), lr=0.01, weight_decay=weight_decay) for net in nets]
     training_data = [get_subject_data(fn) for fn in fns]
     parallel_nets = [nn.DataParallel(net) for net in nets]
     for epoch in range(epochs):
@@ -138,8 +138,6 @@ get_subject_model_path = lambda i: f"{SUBJECT_MODEL_PATH}/{i}.pickle"
 get_subject_model_metadata_path = lambda i: f"{SUBJECT_MODEL_PATH}/{i}_metadata.json"
 
 
-# TODO: Introduce more functions as per notes
-# TODO: This would probably be nicer if it returned classes that are instantiated with the parameters
 def get_subject_fn(fn_name, param):
     """
     Returns a torch function that implements the specified function.
@@ -166,9 +164,7 @@ def get_subject_fn(fn_name, param):
 parser = argparse.ArgumentParser(
     description="Trains subject models, ie. the models that implement the labeling function."
 )
-parser.add_argument("--load_model_idx", type=str, help="Model to evaluate. If specified no training will happen.")
 parser.add_argument("--path", type=str, help="Directory to which to save the models")
-parser.add_argument("--start", type=int, help="From which model index to start training.")
 parser.add_argument(
     "--count",
     type=int,
@@ -188,6 +184,9 @@ parser.add_argument(
 parser.add_argument(
     "--epochs", type=int, help="The number of epochs for which to train the models."
 )
+parser.add_argument(
+    "--weight_decay", type=int, help="Weight decay for the adam optimiser."
+)
 
 get_model_path = lambda path, net_idx: f"{path}/{net_idx}.pickle"
 get_metadata_path = lambda path, net_idx: f"{path}/{net_idx}_metadata.json"
@@ -195,43 +194,26 @@ get_metadata_path = lambda path, net_idx: f"{path}/{net_idx}_metadata.json"
 if __name__ == "__main__":
     print('Parsing args')
     args = parser.parse_args()
-    load_model_idx = args.load_model_idx
-    path = args.path
-    start = args.start
-    count = args.count
-    seed = args.seed
-    fn_name = args.fn_name
-    epochs = args.epochs
-    random.seed(a=seed)
+    random.seed(a=args.seed)
 
-    # TODO: This should just be a separate script. Need to commonise stuff first.
-    if load_model_idx:
-        net = get_subject_net()
-        net.load_state_dict(torch.load(get_model_path(path, load_model_idx)))
-        with open(get_metadata_path(path, load_model_idx), 'r') as f:
-            metadata = json.load(f)
-        print(f'Function: {metadata["fn_name"]}; parameter: {metadata["parameter"]}; loss: {metadata["loss"]}')
-        fn = get_subject_fn(metadata['fn_name'], metadata['parameter'])
-        evaluate_subject_nets([net], [fn])
-    else:
-        print(f"Training {count} models from index {start}")
-        nets = [get_subject_net() for _ in range(count)]
-        parameters = [random.random() for _ in range(count)]
-        fns = [get_subject_fn(fn_name, parameter) for parameter in parameters]
-        train_subject_nets(nets, fns, epochs)
+    print("Initialising networks")
+    nets = [get_subject_net() for _ in range(args.count)]
+    parameters = [random.random() for _ in range(args.count)]
+    fns = [get_subject_fn(args.fn_name, parameter) for parameter in parameters]
+    train_subject_nets(nets, fns, args.epochs, args.weight_decay)
 
-        print("Evaluating models")
-        losses = evaluate_subject_nets(nets, fns)
-        metadata = [
-            {"fn_name": fn_name, "parameter": parameter, "loss": loss}
-            for parameter, loss in zip(parameters, losses)
-        ]
+    print("Evaluating models")
+    losses = evaluate_subject_nets(nets, fns)
+    metadata = [
+        {"fn_name": args.fn_name, "parameter": parameter, "loss": loss, "seed": args.seed, "weight_decay": args.weight_decay, "epochs": args.epochs}
+        for parameter, loss in zip(parameters, losses)
+    ]
 
-        print("Saving models")
-        for i, (net, md) in enumerate(zip(nets, metadata)):
-            net_idx = start + i
-            model_path = get_model_path(path, net_idx) 
-            md_path = get_metadata_path(path, net_idx)
-            torch.save(net.state_dict(), model_path)
-            with open(md_path, "w") as json_file:
-                json.dump(md, json_file)
+    print("Saving models")
+    for i, (net, md) in enumerate(zip(nets, metadata)):
+        net_id = uuid.uuid4()
+        model_path = get_model_path(args.path, net_id) 
+        md_path = get_metadata_path(args.path, net_id)
+        torch.save(net.state_dict(), model_path)
+        with open(md_path, "w") as json_file:
+            json.dump(md, json_file)
