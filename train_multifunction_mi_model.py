@@ -123,7 +123,7 @@ def get_matching_subject_models_names(subject_model_dir, max_loss, weight_decay)
     return matching_names
 
 
-@cache()
+@cache
 def get_subject_model_metadata(self, subject_model_name):
     with open(f'{self._subject_model_dir}/{subject_model_name}_metadata.json') as f:
         return json.load(f)
@@ -159,7 +159,7 @@ class MultifunctionSubjectModelDataset(Dataset):
         return x, y
 
     # This might run out of memory
-    @cache()
+    @cache
     def _get_subject_model(self, subject_model_name):
         net = get_subject_net()
         net.load_state_dict(torch.load(f"{self._subject_model_dir}/{subject_model_name}.pickle"))
