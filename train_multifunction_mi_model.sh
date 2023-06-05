@@ -5,6 +5,7 @@
 #SBATCH -p res-gpu-small
 #SBATCH --qos=short
 #SBATCH --time=2-00:00:00
+#SBATCH -o mi_models_out/%A_%a.out
 epochs=1000
 weight_decay=$1
 
@@ -13,4 +14,4 @@ module load cuda/11.7
 
 source /home2/wclv88/bounding-mi/bounding-mi/bin/activate
 
-stdbuf -oL /home2/wclv88/bounding-mi/bounding-mi/bin/python train_multifunction_mi_model.py --epochs $epochs --subject_model_dir subject_models/ --weight_decay $weight_decay --max_loss 0.0001
+stdbuf -oL /home2/wclv88/bounding-mi/bounding-mi/bin/python train_multifunction_mi_model.py --epochs $epochs --subject_model_dir subject_models/ --weight_decay $weight_decay --max_loss 0.0001 --model_path "mi_models/${weight_decay}.pickle"

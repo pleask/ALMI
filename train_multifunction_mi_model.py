@@ -185,7 +185,7 @@ parser.add_argument(
     "--max_loss",
     type=float,
     help="Max usable loss for the subject models",
-    default=0.
+    default=0.0001
 )
 
 if __name__ == '__main__':
