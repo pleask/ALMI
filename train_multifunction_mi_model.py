@@ -114,7 +114,7 @@ def get_matching_subject_models_names(subject_model_dir, max_loss, weight_decay)
         if not filename.endswith('.pickle'):
             continue
         subject_model_name = filename.removesuffix('.pickle')
-        metadata = get_subject_model_metadata(subject_model_name)
+        metadata = get_subject_model_metadata(subject_model_dir, subject_model_name)
         if metadata['loss'] > max_loss:
             pass
         if metadata['weight_decay'] != weight_decay:
@@ -124,7 +124,7 @@ def get_matching_subject_models_names(subject_model_dir, max_loss, weight_decay)
 
 
 @cache
-def get_subject_model_metadata(subject_model_dir,subject_model_name):
+def get_subject_model_metadata(subject_model_dir, subject_model_name):
     with open(f'{subject_model_dir}/{subject_model_name}_metadata.json') as f:
         return json.load(f)
 
