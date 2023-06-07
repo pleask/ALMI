@@ -198,10 +198,15 @@ if __name__ == '__main__':
 
     print("Creating dataset", flush=True)
     all_matching_subject_models = get_matching_subject_models_names(args.subject_model_dir, args.max_loss, args.weight_decay)
+    print(f"Found {len(all_matching_subject_models)}", flush=True)
+    print("Creating training dataset")
     train_sample_count = int(all_matching_subject_models * MI_MODEL_TRAIN_SPLIT_RATIO)
     train_dataset = MultifunctionSubjectModelDataset(args.subject_model_dir, all_matching_subject_models[:train_sample_count])
+    print("Creating training dataloader")
     train_dataloader = DataLoader(train_dataset, batch_size=20, shuffle=True)
+    print("Creating testing dataset")
     test_dataset = MultifunctionSubjectModelDataset(args.subject_model_dir, all_matching_subject_models[train_sample_count:])
+    print("Creating testing dataloader")
     test_dataloader = DataLoader(test_dataset, batch_size=20, shuffle=True)
 
     print("Creating model", flush=True)
