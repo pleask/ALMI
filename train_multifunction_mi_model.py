@@ -111,14 +111,19 @@ def get_matching_subject_models_names(subject_model_dir, max_loss, weight_decay)
     all_subject_model_filenames = os.listdir(subject_model_dir)
     matching_names = []
     for filename in all_subject_model_filenames:
+        # skip the metadata files for now
         if not filename.endswith('.pickle'):
             continue
         subject_model_name = filename.removesuffix('.pickle')
-        metadata = get_subject_model_metadata(subject_model_dir, subject_model_name)
+        # for some reason there are missing metadata files
+        try:
+            metadata = get_subject_model_metadata(subject_model_dir, subject_model_name)
+        except FileNotFoundError:
+            continue
         if metadata['loss'] > max_loss:
-            pass
+            continue
         if metadata['weight_decay'] != weight_decay:
-            pass
+            continue
         matching_names.append(subject_model_name)
     return matching_names
 
