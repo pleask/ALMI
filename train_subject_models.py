@@ -124,6 +124,13 @@ def evaluate_subject_nets(nets, fns):
 
     return losses
 
+FUNCTION_NAMES = [
+        'addition',
+        'multiplication',
+        'sigmoid',
+        'exponent',
+        'min',
+]
 
 def get_subject_fn(fn_name, param):
     """
@@ -134,15 +141,15 @@ def get_subject_fn(fn_name, param):
     fn_name: the name of the function
     param: a float between 0 and 1
     """
-    if fn_name == "addition":
+    if fn_name == FUNCTION_NAMES[0]:
         return partial(lambda c, x: x + c * 10 * 5, param)
-    elif fn_name == "multiplication":
+    elif fn_name == FUNCTION_NAMES[1]:
         return partial(lambda c, x: x * c * 10, param)
-    elif fn_name == "sigmoid":
+    elif fn_name == FUNCTION_NAMES[2]:
         return partial(lambda c, x: 20*(1/(1+torch.exp(-(x+c)))-0.5), param)
-    elif fn_name == 'exponent':
+    elif fn_name == FUNCTION_NAMES[3]:
         return partial(lambda c, x: x ** (c / 2), param)
-    elif fn_name == 'min':
+    elif fn_name == FUNCTION_NAMES[4]:
         return partial(lambda c, x: torch.min(torch.full_like(x, c), x), param)
     else:
         raise ValueError(f'Invalid function name: {fn_name}')

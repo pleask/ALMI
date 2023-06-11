@@ -3,6 +3,7 @@ Trains a network to recover both the function that the network implements, and
 the coefficient.
 """
 import argparse
+import asyncio
 from functools import cache
 import json
 import math
@@ -13,13 +14,11 @@ import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 
-from train_subject_models import get_subject_net
+from train_subject_models import get_subject_net, FUNCTION_NAMES
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 random.seed(a=0)
 
-# TODO: Commonise this with the subject models script
-FUNCTION_NAMES = ['addition', 'multiplication', 'sigmoid', 'exponent', 'min']
 MI_CRITERION = nn.MSELoss()
 SUBJECT_MODEL_PARAMETER_COUNT = 726
 MI_MODEL_TRAIN_SPLIT_RATIO = 0.7
@@ -53,8 +52,10 @@ def evaluate_model(model, test_dataloader, test_dataset):
     model.eval()
     with torch.no_grad():
         for inputs, targets in test_dataloader:
+            print('-----')
             outputs = model(inputs)
-            [print(test_dataset.get_dataset_index(i), t.detach().cpu().item(), o.detach().cpu().item()) for i, (t, o) in enumerate(zip(targets, outputs.squeeze()))]
+            for target, output in zip(targets, outputs.squeeze()):
+                print(FUNCTION_NAMES[torch.argmax(target[:5]).item()], target[-1].detach().item(), output[-1].detach().item())
             break
 
 class PositionalEncoding(nn.Module):
@@ -107,25 +108,31 @@ class Transformer(nn.Module):
         )  # use mean pooling to obtain a single output value
         return x
 
-def get_matching_subject_models_names(subject_model_dir, max_loss, weight_decay):
+
+async def get_matching_subject_models_names(subject_model_dir, max_loss, weight_decay):
     all_subject_model_filenames = os.listdir(subject_model_dir)
-    matching_names = []
-    for filename in all_subject_model_filenames:
-        # skip the metadata files for now
+    all_subject_model_filenames = all_subject_model_filenames[:len(all_subject_model_filenames) // 100]
+
+    async def check_matches(i, filename):
+        # skip metadata files
         if not filename.endswith('.pickle'):
-            continue
+            return False
         subject_model_name = filename.removesuffix('.pickle')
         # for some reason there are missing metadata files
         try:
             metadata = get_subject_model_metadata(subject_model_dir, subject_model_name)
         except FileNotFoundError:
-            continue
-        if metadata['loss'] > max_loss:
-            continue
+            print(f'did not find metadata file for model {subject_model_name}', flush=True)
+            return False
         if metadata['weight_decay'] != weight_decay:
-            continue
-        matching_names.append(subject_model_name)
-    return matching_names
+            return False
+        if metadata['loss'] > max_loss:
+            return False
+        return True
+
+    tasks = [check_matches(i, f) for i, f in enumerate(all_subject_model_filenames)]
+    do_files_match = await asyncio.gather(*tasks)
+    return [f.removesuffix('.pickle') for i, f in enumerate(all_subject_model_filenames) if do_files_match[i]]
 
 
 @cache
@@ -140,20 +147,20 @@ class MultifunctionSubjectModelDataset(Dataset):
     """
     def __init__(self, subject_model_dir, subject_model_names):
         self._subject_model_dir = subject_model_dir
-        self._subject_model_names = subject_model_names
+        self.subject_model_names = subject_model_names
 
     def __len__(self):
-        return len(self._subject_models)
+        return len(self.subject_model_names)
 
     def __getitem__(self, idx):
-        name = self._subject_model_names[idx]
+        name = self.subject_model_names[idx]
 
-        model = self._get_subject_model(name)
+        model = self._get_subject_model(name).to(DEVICE)
         x = torch.concat(
             [param.detach().reshape(-1) for _, param in model.named_parameters()]
-        )
+        ).to(DEVICE)
 
-        metadata = self._get_subject_model_metadata(name)
+        metadata = get_subject_model_metadata(self._subject_model_dir, name)
         fn_name = metadata['fn_name']
         parameter = metadata['parameter']
         one_hot = [0.] * len(FUNCTION_NAMES)
@@ -190,17 +197,17 @@ parser.add_argument(
     "--max_loss",
     type=float,
     help="Max usable loss for the subject models",
-    default=0.0001
+    default=0.001
 )
 
 if __name__ == '__main__':
     args = parser.parse_args()
 
     print("Creating dataset", flush=True)
-    all_matching_subject_models = get_matching_subject_models_names(args.subject_model_dir, args.max_loss, args.weight_decay)
+    all_matching_subject_models = asyncio.run(get_matching_subject_models_names(args.subject_model_dir, args.max_loss, args.weight_decay))
     print(f"Found {len(all_matching_subject_models)}", flush=True)
     print("Creating training dataset")
-    train_sample_count = int(all_matching_subject_models * MI_MODEL_TRAIN_SPLIT_RATIO)
+    train_sample_count = int(len(all_matching_subject_models) * MI_MODEL_TRAIN_SPLIT_RATIO)
     train_dataset = MultifunctionSubjectModelDataset(args.subject_model_dir, all_matching_subject_models[:train_sample_count])
     print("Creating training dataloader")
     train_dataloader = DataLoader(train_dataset, batch_size=20, shuffle=True)
@@ -210,7 +217,7 @@ if __name__ == '__main__':
     test_dataloader = DataLoader(test_dataset, batch_size=20, shuffle=True)
 
     print("Creating model", flush=True)
-    model = Transformer(SUBJECT_MODEL_PARAMETER_COUNT, 6, num_heads=6, hidden_size=240)
+    model = Transformer(SUBJECT_MODEL_PARAMETER_COUNT, 6, num_heads=6, hidden_size=240).to(DEVICE)
     optimizer = torch.optim.Adam(model.parameters(), lr=0.00001)
 
     print("Training model", flush=True)
