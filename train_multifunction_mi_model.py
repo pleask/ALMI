@@ -202,6 +202,9 @@ parser.add_argument(
 
 if __name__ == '__main__':
     args = parser.parse_args()
+    print('Epochs:', args.epochs)
+    print('Weight Decay:', args.weight_decay)
+    print('Max Loss:', args.max_loss)
 
     print("Creating dataset", flush=True)
     all_matching_subject_models = asyncio.run(get_matching_subject_models_names(args.subject_model_dir, args.max_loss, args.weight_decay))
