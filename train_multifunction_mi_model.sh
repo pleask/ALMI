@@ -6,7 +6,7 @@
 #SBATCH --qos=short
 #SBATCH --time=2-00:00:00
 #SBATCH --output=mi_models_out/%j.txt
-epochs=10
+epochs=10000
 weight_decay=$1
 
 source /etc/profile

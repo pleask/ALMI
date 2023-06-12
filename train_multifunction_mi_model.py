@@ -111,7 +111,7 @@ class Transformer(nn.Module):
 
 async def get_matching_subject_models_names(subject_model_dir, max_loss, weight_decay):
     all_subject_model_filenames = os.listdir(subject_model_dir)
-    all_subject_model_filenames = all_subject_model_filenames[:len(all_subject_model_filenames) // 100]
+    all_subject_model_filenames = all_subject_model_filenames[:len(all_subject_model_filenames)]
 
     async def check_matches(i, filename):
         # skip metadata files
