@@ -54,7 +54,7 @@ def train_model(model, model_path, optimizer, epochs, train_dataloader, test_dat
             torch.save(model.state_dict(), model_path)
 
 
-def evaluate_model(model, test_dataloader, test_dataset):
+def evaluate_model(model, test_dataloader):
     model.eval()
     with torch.no_grad():
         for inputs, targets in test_dataloader:
@@ -187,6 +187,7 @@ class MultifunctionSubjectModelDataset(Dataset):
 parser = argparse.ArgumentParser()
 parser.add_argument("--subject_model_dir", help="Folder containing the subject models")
 parser.add_argument("--model_path", type=str, help="Path to save this model")
+parser.add_argument("--load_model", type=str, help="Path from which to load a model. Overrides model_path argument. Use in conjunction with --epochs=0 to just evaluate the model.")
 parser.add_argument(
     "--epochs",
     type=int,
@@ -216,8 +217,9 @@ if __name__ == '__main__':
     print("Creating dataset", flush=True)
     all_matching_subject_models = asyncio.run(get_matching_subject_models_names(args.subject_model_dir, args.max_loss, args.weight_decay))
     print(f"Found {len(all_matching_subject_models)}", flush=True)
-    print("Creating training dataset")
+
     train_sample_count = int(len(all_matching_subject_models) * MI_MODEL_TRAIN_SPLIT_RATIO)
+    print("Creating training dataset")
     train_dataset = MultifunctionSubjectModelDataset(args.subject_model_dir, all_matching_subject_models[:train_sample_count])
     print("Creating training dataloader")
     train_dataloader = DataLoader(train_dataset, batch_size=20, shuffle=True)
@@ -226,12 +228,18 @@ if __name__ == '__main__':
     print("Creating testing dataloader")
     test_dataloader = DataLoader(test_dataset, batch_size=20, shuffle=True)
 
+    model_path = args.model_path
     print("Creating model", flush=True)
     model = Transformer(SUBJECT_MODEL_PARAMETER_COUNT, 6, num_heads=6, hidden_size=240).to(DEVICE)
+    if args.load_model:
+        print(f"Loading model {args.load_model}", flush=True)
+        model.load_state_dict(torch.load(args.load_model))
+        model_path = args.load_model
+
     optimizer = torch.optim.Adam(model.parameters(), lr=0.00001)
 
     print("Training model", flush=True)
-    train_model(model, args.model_path, optimizer, args.epochs, train_dataloader, test_dataloader, test_dataset)
+    train_model(model, model_path, optimizer, args.epochs, train_dataloader, test_dataloader, test_dataset)
 
     print("Prediction sample", flush=True)
     evaluate_model(model, test_dataloader, test_dataset)
