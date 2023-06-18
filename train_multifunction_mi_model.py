@@ -14,7 +14,12 @@ import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 
+import wandb
+
 from train_subject_models import get_subject_net, FUNCTION_NAMES
+
+os.environ["WANDB_API_KEY"] = "67a9294e56f5c3c41f8b49ac9bdaeacd7693f7f3"
+os.environ["WANDB_SILENT"] = "true"
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 random.seed(a=0)
@@ -45,6 +50,7 @@ def train_model(model, model_path, optimizer, epochs, train_dataloader, test_dat
                     test_loss += loss.item() * inputs.size(0)
             avg_loss = test_loss / len(test_dataset)
             print(f"Epoch {epoch+1} of {epochs}. Test Loss: {avg_loss:.4f}", flush=True)
+            wandb.log({'epoch': epoch+1, 'loss': loss})
             torch.save(model.state_dict(), model_path)
 
 
@@ -202,9 +208,10 @@ parser.add_argument(
 
 if __name__ == '__main__':
     args = parser.parse_args()
-    print('Epochs:', args.epochs)
-    print('Weight Decay:', args.weight_decay)
-    print('Max Loss:', args.max_loss)
+    for arg, value in vars(args).items():
+        print(f'{arg}: {value}')
+
+    wandb.init(config=args, project='bounding-mi', entity='patrickaaleask', reinit=True)
 
     print("Creating dataset", flush=True)
     all_matching_subject_models = asyncio.run(get_matching_subject_models_names(args.subject_model_dir, args.max_loss, args.weight_decay))
