@@ -115,29 +115,19 @@ class Transformer(nn.Module):
         return x
 
 
-async def get_matching_subject_models_names(subject_model_dir, max_loss, weight_decay):
-    all_subject_model_filenames = os.listdir(subject_model_dir)
+def get_matching_subject_models_names(subject_model_dir, max_loss, weight_decay):
+    matching_subject_models_names = []
 
-    async def check_matches(i, filename):
-        # skip metadata files
-        if not filename.endswith('.pickle'):
-            return False
-        subject_model_name = filename.removesuffix('.pickle')
-        # for some reason there are missing metadata files
-        try:
-            metadata = get_subject_model_metadata(subject_model_dir, subject_model_name)
-        except FileNotFoundError:
-            print(f'did not find metadata file for model {subject_model_name}', flush=True)
-            return False
-        if metadata['weight_decay'] != weight_decay:
-            return False
-        if metadata['loss'] > max_loss:
-            return False
-        return True
-
-    tasks = [check_matches(i, f) for i, f in enumerate(all_subject_model_filenames)]
-    do_files_match = await asyncio.gather(*tasks)
-    return [f.removesuffix('.pickle') for i, f in enumerate(all_subject_model_filenames) if do_files_match[i]]
+    index_file_path = f'{subject_model_dir}/index.txt'
+    with open(index_file_path, 'r') as index_file:
+        for line in index_file:
+            line = line.strip()
+            model_name, metadata_string = line.split(' ', maxsplit=1)
+            metadata = json.loads(metadata_string)
+            if metadata['weight_decay'] == weight_decay and metadata['loss'] <= max_loss:
+                matching_subject_models_names.append(model_name)
+        
+    return matching_subject_models_names
 
 
 @cache
@@ -214,7 +204,7 @@ if __name__ == '__main__':
     wandb.init(config=args, project='bounding-mi', entity='patrickaaleask', reinit=True)
 
     print("Creating dataset", flush=True)
-    all_matching_subject_models = asyncio.run(get_matching_subject_models_names(args.subject_model_dir, args.max_loss, args.weight_decay))
+    all_matching_subject_models = get_matching_subject_models_names(args.subject_model_dir, args.max_loss, args.weight_decay)
     print(f"Found {len(all_matching_subject_models)}", flush=True)
 
     train_sample_count = int(len(all_matching_subject_models) * MI_MODEL_TRAIN_SPLIT_RATIO)
