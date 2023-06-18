@@ -5,7 +5,7 @@ import asyncio
 import json
 import os
 
-from .train_multifunction_mi_model import get_subject_model_metadata
+from train_multifunction_mi_model import get_subject_model_metadata
 
 SUBJECT_MODEL_DIR = 'subject_models'
 INDEX_FILE = 'subject_models_index.txt'
@@ -24,13 +24,13 @@ async def get_metadata():
             return None
         return (subject_model_name, json.dumps(metadata))
         
-    tasks = [get_metadata(f) for f in enumerate(all_subject_model_filenames)]
+    tasks = [get_metadata(f) for f in all_subject_model_filenames]
     model_metadata = await asyncio.gather(*tasks)
     return [m for m in model_metadata if m is not None]
 
 if __name__ == '__main__':
-    model_metadata = get_metadata()
+    model_metadata = asyncio.run(get_metadata())
 
     with open(INDEX_FILE, 'w') as file:
         for l in model_metadata:
-            file.write(l + '\n')
+            file.write(f'{l[0]} {l[1]}\n')
