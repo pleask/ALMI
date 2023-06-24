@@ -114,6 +114,23 @@ class Transformer(nn.Module):
         return x
 
 
+class FeedForwardNN(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.fc1 = nn.Linear(SUBJECT_MODEL_PARAMETER_COUNT, 128)
+        self.fc2 = nn.Linear(128, 64)
+        self.fc3 = nn.Linear(64, len(FUNCTION_NAMES) + 1)
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, x):
+        x = self.fc1(x)
+        x = self.fc2(x)
+        x = self.fc3(x)
+        x = self.sigmoid(x)
+
+        return x
+
+
 def get_matching_subject_models_names(subject_model_dir, max_loss, weight_decay):
     matching_subject_models_names = []
 
@@ -174,6 +191,7 @@ class MultifunctionSubjectModelDataset(Dataset):
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--subject_model_dir", help="Folder containing the subject models")
+parser.add_argument("--model_type", type=str, help="Type of model to use.")
 parser.add_argument("--model_path", type=str, help="Path to save this model")
 parser.add_argument("--load_model", type=str, help="Path from which to load a model. Overrides model_path argument. Use in conjunction with --epochs=0 to just evaluate the model.")
 parser.add_argument(
@@ -218,9 +236,13 @@ if __name__ == '__main__':
     print("Creating testing dataloader")
     test_dataloader = DataLoader(test_dataset, batch_size=20, shuffle=True)
 
-    model_path = args.model_path
     print("Creating model", flush=True)
-    model = Transformer(SUBJECT_MODEL_PARAMETER_COUNT, 6, num_heads=6, hidden_size=240).to(DEVICE)
+    model_path = args.model_path
+
+    model = FeedForwardNN().to(DEVICE)
+    if args.model_type == 'transformer':
+        model = Transformer(SUBJECT_MODEL_PARAMETER_COUNT, 6, num_heads=6, hidden_size=240).to(DEVICE)
+
     if args.load_model:
         print(f"Loading model {args.load_model}", flush=True)
         model.load_state_dict(torch.load(args.load_model))
