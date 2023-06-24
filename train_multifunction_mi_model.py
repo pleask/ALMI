@@ -26,7 +26,6 @@ random.seed(a=0)
 MI_CRITERION = nn.MSELoss()
 SUBJECT_MODEL_PARAMETER_COUNT = 726
 MI_MODEL_TRAIN_SPLIT_RATIO = 0.7
-BATCH_SIZE=1024
 
 def train_model(model, model_path, optimizer, epochs, train_dataloader, test_dataloader, test_dataset):
     model.train()
@@ -120,9 +119,9 @@ class Transformer(nn.Module):
 class FeedForwardNN(nn.Module):
     def __init__(self):
         super().__init__()
-        self.fc1 = nn.Linear(SUBJECT_MODEL_PARAMETER_COUNT, 128)
-        self.fc2 = nn.Linear(128, 64)
-        self.fc3 = nn.Linear(64, len(FUNCTION_NAMES) + 1)
+        self.fc1 = nn.Linear(SUBJECT_MODEL_PARAMETER_COUNT, 16)
+        self.fc2 = nn.Linear(16, 8)
+        self.fc3 = nn.Linear(8, len(FUNCTION_NAMES) + 1)
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, x):
@@ -229,15 +228,19 @@ if __name__ == '__main__':
     all_matching_subject_models = get_matching_subject_models_names(args.subject_model_dir, args.max_loss, args.weight_decay)
     print(f"Found {len(all_matching_subject_models)}", flush=True)
 
+    batch_size = 1024
+    if args.model_type == 'transformer':
+        batch_size = 256
+
     train_sample_count = int(len(all_matching_subject_models) * MI_MODEL_TRAIN_SPLIT_RATIO)
     print("Creating training dataset")
     train_dataset = MultifunctionSubjectModelDataset(args.subject_model_dir, all_matching_subject_models[:train_sample_count])
     print("Creating training dataloader")
-    train_dataloader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
+    train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     print("Creating testing dataset")
     test_dataset = MultifunctionSubjectModelDataset(args.subject_model_dir, all_matching_subject_models[train_sample_count:])
     print("Creating testing dataloader")
-    test_dataloader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=True)
+    test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
 
     print("Creating model", flush=True)
     model_path = args.model_path
