@@ -41,10 +41,10 @@ def train_model(model, model_path, optimizer, epochs, train_dataloader, test_dat
                 loss = MI_CRITERION(outputs, targets.unsqueeze(1))
                 test_loss += loss.item() * inputs.size(0)
         avg_loss = test_loss / len(test_dataset)
-        log = log | {'epoch': epoch+1, 'validation_loss': avg_loss}
+        log = log | {'validation_loss': avg_loss}
 
         for i, (inputs, targets) in enumerate(train_dataloader):
-            log = log | {'batch': i, 'loss': loss}
+            log = log | {'loss': loss}
             optimizer.zero_grad()
             outputs = model(inputs)
             loss = MI_CRITERION(outputs, targets)
