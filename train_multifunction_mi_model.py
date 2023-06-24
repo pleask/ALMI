@@ -33,7 +33,7 @@ def train_model(model, model_path, optimizer, epochs, train_dataloader, test_dat
         for _, (inputs, targets) in enumerate(train_dataloader):
             optimizer.zero_grad()
             outputs = model(inputs)
-            loss = MI_CRITERION(outputs, targets.unsqueeze(1))
+            loss = MI_CRITERION(outputs, targets)
             loss.backward()
             optimizer.step()
 
