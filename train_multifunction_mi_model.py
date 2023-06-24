@@ -18,7 +18,6 @@ import wandb
 
 from train_subject_models import get_subject_net, FUNCTION_NAMES
 
-os.environ["WANDB_API_KEY"] = "67a9294e56f5c3c41f8b49ac9bdaeacd7693f7f3"
 os.environ["WANDB_SILENT"] = "true"
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -31,7 +30,7 @@ MI_MODEL_TRAIN_SPLIT_RATIO = 0.7
 def train_model(model, model_path, optimizer, epochs, train_dataloader, test_dataloader, test_dataset):
     model.train()
     for epoch in range(epochs):
-        for i, (inputs, targets) in enumerate(train_dataloader):
+        for _, (inputs, targets) in enumerate(train_dataloader):
             optimizer.zero_grad()
             outputs = model(inputs)
             loss = MI_CRITERION(outputs, targets.unsqueeze(1))
@@ -197,6 +196,8 @@ parser.add_argument(
 )
 
 if __name__ == '__main__':
+    os.environ["WAND_API_KEY"] = "dd685d7aa9b38a2289e5784a961b81e22fc4c735"
+
     args = parser.parse_args()
     for arg, value in vars(args).items():
         print(f'{arg}: {value}')
@@ -231,4 +232,4 @@ if __name__ == '__main__':
     train_model(model, model_path, optimizer, args.epochs, train_dataloader, test_dataloader, test_dataset)
 
     print("Prediction sample", flush=True)
-    evaluate_model(model, test_dataloader, test_dataset)
+    evaluate_model(model, test_dataloader)

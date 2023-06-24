@@ -8,7 +8,7 @@ import os
 from train_multifunction_mi_model import get_subject_model_metadata
 
 SUBJECT_MODEL_DIR = 'subject_models'
-INDEX_FILE = 'subject_models_index.txt'
+INDEX_FILE = 'subject_models/index.txt'
 
 async def get_metadata():
     all_subject_model_filenames = os.listdir(SUBJECT_MODEL_DIR)
