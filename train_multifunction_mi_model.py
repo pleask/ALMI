@@ -38,20 +38,18 @@ def train_model(model, model_path, optimizer, epochs, train_dataloader, test_dat
             loss.backward()
             optimizer.step()
 
-        # after every 10 epochs, evaluate and save the model
-        if epoch % 10 == 9:
-            model.eval()
-            test_loss = 0.0
-            with torch.no_grad():
-                for inputs, targets in test_dataloader:
-                    targets = targets.to(DEVICE)
-                    outputs = model(inputs)
-                    loss = MI_CRITERION(outputs, targets.unsqueeze(1))
-                    test_loss += loss.item() * inputs.size(0)
-            avg_loss = test_loss / len(test_dataset)
-            print(f"Epoch {epoch+1} of {epochs}. Test Loss: {avg_loss:.4f}", flush=True)
-            wandb.log({'epoch': epoch+1, 'loss': loss})
-            torch.save(model.state_dict(), model_path)
+        model.eval()
+        test_loss = 0.0
+        with torch.no_grad():
+            for inputs, targets in test_dataloader:
+                targets = targets.to(DEVICE)
+                outputs = model(inputs)
+                loss = MI_CRITERION(outputs, targets.unsqueeze(1))
+                test_loss += loss.item() * inputs.size(0)
+        avg_loss = test_loss / len(test_dataset)
+        print(f"Epoch {epoch+1} of {epochs}. Test Loss: {avg_loss:.4f}", flush=True)
+        wandb.log({'epoch': epoch+1, 'loss': loss})
+        torch.save(model.state_dict(), model_path)
 
 
 def evaluate_model(model, test_dataloader):
