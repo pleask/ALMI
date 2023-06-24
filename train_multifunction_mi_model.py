@@ -26,6 +26,7 @@ random.seed(a=0)
 MI_CRITERION = nn.MSELoss()
 SUBJECT_MODEL_PARAMETER_COUNT = 726
 MI_MODEL_TRAIN_SPLIT_RATIO = 0.7
+BATCH_SIZE=1024
 
 def train_model(model, model_path, optimizer, epochs, train_dataloader, test_dataloader, test_dataset):
     model.train()
@@ -230,11 +231,11 @@ if __name__ == '__main__':
     print("Creating training dataset")
     train_dataset = MultifunctionSubjectModelDataset(args.subject_model_dir, all_matching_subject_models[:train_sample_count])
     print("Creating training dataloader")
-    train_dataloader = DataLoader(train_dataset, batch_size=20, shuffle=True)
+    train_dataloader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
     print("Creating testing dataset")
     test_dataset = MultifunctionSubjectModelDataset(args.subject_model_dir, all_matching_subject_models[train_sample_count:])
     print("Creating testing dataloader")
-    test_dataloader = DataLoader(test_dataset, batch_size=20, shuffle=True)
+    test_dataloader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=True)
 
     print("Creating model", flush=True)
     model_path = args.model_path
