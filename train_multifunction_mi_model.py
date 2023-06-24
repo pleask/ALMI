@@ -31,13 +31,7 @@ BATCH_SIZE=1024
 def train_model(model, model_path, optimizer, epochs, train_dataloader, test_dataloader, test_dataset):
     model.train()
     for epoch in range(epochs):
-        for i, (inputs, targets) in enumerate(train_dataloader):
-            optimizer.zero_grad()
-            outputs = model(inputs)
-            loss = MI_CRITERION(outputs, targets)
-            loss.backward()
-            optimizer.step()
-            wandb.log({'batch': i, 'loss': loss})
+        log = {}
 
         model.eval()
         test_loss = 0.0
@@ -48,9 +42,19 @@ def train_model(model, model_path, optimizer, epochs, train_dataloader, test_dat
                 loss = MI_CRITERION(outputs, targets.unsqueeze(1))
                 test_loss += loss.item() * inputs.size(0)
         avg_loss = test_loss / len(test_dataset)
-        wandb.log({'epoch': epoch+1, 'validation_loss': avg_loss})
-        torch.save(model.state_dict(), model_path)
+        log = log | {'epoch': epoch+1, 'validation_loss': avg_loss}
 
+        for i, (inputs, targets) in enumerate(train_dataloader):
+            log = log | {'batch': i, 'loss': loss}
+            optimizer.zero_grad()
+            outputs = model(inputs)
+            loss = MI_CRITERION(outputs, targets)
+            loss.backward()
+            optimizer.step()
+
+            wandb.log(log)
+
+        torch.save(model.state_dict(), model_path)
 
 def evaluate_model(model, test_dataloader):
     model.eval()
