@@ -3,7 +3,6 @@ Trains a network to recover both the function that the network implements, and
 the coefficient.
 """
 import argparse
-import asyncio
 from functools import cache
 import json
 import math
@@ -16,7 +15,7 @@ from torch.utils.data import Dataset, DataLoader
 
 import wandb
 
-from train_subject_models import get_subject_net, FUNCTION_NAMES
+from train_subject_models import get_subject_net
 
 os.environ["WANDB_SILENT"] = "true"
 
@@ -26,10 +25,11 @@ random.seed(a=0)
 MI_CRITERION = nn.MSELoss()
 SUBJECT_MODEL_PARAMETER_COUNT = 726
 MI_MODEL_TRAIN_SPLIT_RATIO = 0.7
+BATCH_SIZE=1024
 
 def train_model(model, model_path, optimizer, epochs, train_dataloader, test_dataloader, test_dataset):
     model.train()
-    for epoch in range(epochs):
+    for _ in range(epochs):
         log = {}
 
         model.eval()
@@ -43,7 +43,7 @@ def train_model(model, model_path, optimizer, epochs, train_dataloader, test_dat
         avg_loss = test_loss / len(test_dataset)
         log = log | {'validation_loss': avg_loss}
 
-        for i, (inputs, targets) in enumerate(train_dataloader):
+        for (inputs, targets) in train_dataloader:
             log = log | {'loss': loss}
             optimizer.zero_grad()
             outputs = model(inputs)
@@ -62,7 +62,7 @@ def evaluate_model(model, test_dataloader):
             print('-----')
             outputs = model(inputs)
             for target, output in zip(targets, outputs.squeeze()):
-                print(FUNCTION_NAMES[torch.argmax(target[:5]).item()], target[-1].detach().item(), output[-1].detach().item())
+                print(test_dataloader.functions[torch.argmax(target[:5]).item()], target[-1].detach().item(), output[-1].detach().item())
             break
 
 class PositionalEncoding(nn.Module):
@@ -117,11 +117,11 @@ class Transformer(nn.Module):
 
 
 class FeedForwardNN(nn.Module):
-    def __init__(self):
+    def __init__(self, out_size):
         super().__init__()
-        self.fc1 = nn.Linear(SUBJECT_MODEL_PARAMETER_COUNT, 16)
-        self.fc2 = nn.Linear(16, 8)
-        self.fc3 = nn.Linear(8, len(FUNCTION_NAMES) + 1)
+        self.fc1 = nn.Linear(SUBJECT_MODEL_PARAMETER_COUNT, 128)
+        self.fc2 = nn.Linear(128, 64)
+        self.fc3 = nn.Linear(64, out_size)
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, x):
@@ -129,11 +129,10 @@ class FeedForwardNN(nn.Module):
         x = self.fc2(x)
         x = self.fc3(x)
         x = self.sigmoid(x)
-
         return x
 
 
-def get_matching_subject_models_names(subject_model_dir, max_loss, weight_decay):
+def get_matching_subject_models_names(subject_model_dir, functions, max_loss, weight_decay):
     matching_subject_models_names = []
 
     index_file_path = f'{subject_model_dir}/index.txt'
@@ -142,8 +141,13 @@ def get_matching_subject_models_names(subject_model_dir, max_loss, weight_decay)
             line = line.strip()
             model_name, metadata_string = line.split(' ', maxsplit=1)
             metadata = json.loads(metadata_string)
-            if metadata['weight_decay'] == weight_decay and metadata['loss'] <= max_loss:
-                matching_subject_models_names.append(model_name)
+            if metadata['weight_decay'] != weight_decay:
+                continue
+            if metadata['loss'] > max_loss:
+                continue
+            if metadata['fn_name'] not in functions:
+                continue
+            matching_subject_models_names.append(model_name)
         
     return matching_subject_models_names
 
@@ -158,9 +162,10 @@ class MultifunctionSubjectModelDataset(Dataset):
     """
     Dataset of subject models that match the weight decay specified.
     """
-    def __init__(self, subject_model_dir, subject_model_names):
+    def __init__(self, subject_model_dir, subject_model_names, functions):
         self._subject_model_dir = subject_model_dir
         self.subject_model_names = subject_model_names
+        self.functions = functions
 
     def __len__(self):
         return len(self.subject_model_names)
@@ -176,8 +181,8 @@ class MultifunctionSubjectModelDataset(Dataset):
         metadata = get_subject_model_metadata(self._subject_model_dir, name)
         fn_name = metadata['fn_name']
         parameter = metadata['parameter']
-        one_hot = [0.] * len(FUNCTION_NAMES)
-        one_hot[FUNCTION_NAMES.index(fn_name)] = 1.
+        one_hot = [0.] * len(self.functions)
+        one_hot[self.functions.index(fn_name)] = 1.
         one_hot.append(parameter)
         y = torch.tensor(one_hot).to(DEVICE)
 
@@ -190,12 +195,17 @@ class MultifunctionSubjectModelDataset(Dataset):
         net.load_state_dict(torch.load(f"{self._subject_model_dir}/{subject_model_name}.pickle"))
         return net
 
+    @property
+    def out_size(self):
+        return len(self.functions) + 1
+
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--subject_model_dir", help="Folder containing the subject models")
 parser.add_argument("--model_type", type=str, help="Type of model to use.")
 parser.add_argument("--model_path", type=str, help="Path to save this model")
 parser.add_argument("--load_model", type=str, help="Path from which to load a model. Overrides model_path argument. Use in conjunction with --epochs=0 to just evaluate the model.")
+parser.add_argument('--functions', nargs='+', type=str, help='List of subject functions. If empty, will use all.')
 parser.add_argument(
     "--epochs",
     type=int,
@@ -225,29 +235,25 @@ if __name__ == '__main__':
     wandb.init(config=args, project='bounding-mi', entity='patrickaaleask', reinit=True)
 
     print("Creating dataset", flush=True)
-    all_matching_subject_models = get_matching_subject_models_names(args.subject_model_dir, args.max_loss, args.weight_decay)
+    all_matching_subject_models = get_matching_subject_models_names(args.subject_model_dir, args.functions, args.max_loss, args.weight_decay)
     print(f"Found {len(all_matching_subject_models)}", flush=True)
-
-    batch_size = 1024
-    if args.model_type == 'transformer':
-        batch_size = 256
 
     train_sample_count = int(len(all_matching_subject_models) * MI_MODEL_TRAIN_SPLIT_RATIO)
     print("Creating training dataset")
-    train_dataset = MultifunctionSubjectModelDataset(args.subject_model_dir, all_matching_subject_models[:train_sample_count])
+    train_dataset = MultifunctionSubjectModelDataset(args.subject_model_dir, all_matching_subject_models[:train_sample_count], args.functions)
     print("Creating training dataloader")
-    train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    train_dataloader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
     print("Creating testing dataset")
-    test_dataset = MultifunctionSubjectModelDataset(args.subject_model_dir, all_matching_subject_models[train_sample_count:])
+    test_dataset = MultifunctionSubjectModelDataset(args.subject_model_dir, all_matching_subject_models[train_sample_count:], args.functions)
     print("Creating testing dataloader")
-    test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
+    test_dataloader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=True)
 
     print("Creating model", flush=True)
     model_path = args.model_path
 
-    model = FeedForwardNN().to(DEVICE)
+    model = FeedForwardNN(train_dataset.out_size).to(DEVICE)
     if args.model_type == 'transformer':
-        model = Transformer(SUBJECT_MODEL_PARAMETER_COUNT, 6, num_heads=6, hidden_size=240).to(DEVICE)
+        model = Transformer(SUBJECT_MODEL_PARAMETER_COUNT, train_dataset.out_size, num_heads=6, hidden_size=240).to(DEVICE)
 
     if args.load_model:
         print(f"Loading model {args.load_model}", flush=True)
