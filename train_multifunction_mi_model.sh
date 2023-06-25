@@ -5,15 +5,14 @@
 #SBATCH -p res-gpu-small
 #SBATCH --qos=short
 #SBATCH --time=2-00:00:00
-#SBATCH --output=mi_models_out/%j.txt
-epochs=10000
+#SBATCH --output=mi_models_out/%j.out
+#SBATCH --array=0-10
+epochs=1000
 weight_decay=$1
 
 source /etc/profile
 module load cuda/11.7
 
-source /home2/wclv88/bounding-mi/bounding-mi/bin/activate
-
 echo "${weight_decay}"
 
-stdbuf -oL /home2/wclv88/bounding-mi/bounding-mi/bin/python train_multifunction_mi_model.py --epochs $epochs --subject_model_dir subject_models/ --weight_decay $weight_decay --max_loss 0.001 --model_path "mi_models/${weight_decay}.pickle"
+stdbuf -oL /home2/wclv88/bounding-mi/bin/python train_multifunction_mi_model.py --epochs $epochs --subject_model_dir subject_models/ --weight_decay $weight_decay --max_loss 1. --model_path "mi_models/${weight_decay}.pickle" --model_type='linear' --repeat $SLURM_ARRAY_TASK_ID

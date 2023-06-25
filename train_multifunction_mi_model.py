@@ -15,12 +15,11 @@ from torch.utils.data import Dataset, DataLoader
 
 import wandb
 
-from train_subject_models import get_subject_net
+from train_subject_models import get_subject_net, FUNCTION_NAMES
 
 os.environ["WANDB_SILENT"] = "true"
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-random.seed(a=0)
 
 MI_CRITERION = nn.MSELoss()
 SUBJECT_MODEL_PARAMETER_COUNT = 726
@@ -38,7 +37,7 @@ def train_model(model, model_path, optimizer, epochs, train_dataloader, test_dat
             for inputs, targets in test_dataloader:
                 targets = targets.to(DEVICE)
                 outputs = model(inputs)
-                loss = MI_CRITERION(outputs, targets.unsqueeze(1))
+                loss = MI_CRITERION(outputs, targets)
                 test_loss += loss.item() * inputs.size(0)
         avg_loss = test_loss / len(test_dataset)
         log = log | {'validation_loss': avg_loss}
@@ -55,14 +54,14 @@ def train_model(model, model_path, optimizer, epochs, train_dataloader, test_dat
 
         torch.save(model.state_dict(), model_path)
 
-def evaluate_model(model, test_dataloader):
+def evaluate_model(model, test_dataloader, functions):
     model.eval()
     with torch.no_grad():
         for inputs, targets in test_dataloader:
             print('-----')
             outputs = model(inputs)
             for target, output in zip(targets, outputs.squeeze()):
-                print(test_dataloader.functions[torch.argmax(target[:5]).item()], target[-1].detach().item(), output[-1].detach().item())
+                print(functions[torch.argmax(target[:5]).item()], target[-1].detach().item(), output[-1].detach().item())
             break
 
 class PositionalEncoding(nn.Module):
@@ -120,15 +119,20 @@ class FeedForwardNN(nn.Module):
     def __init__(self, out_size):
         super().__init__()
         self.fc1 = nn.Linear(SUBJECT_MODEL_PARAMETER_COUNT, 128)
+        self.relu1 = nn.ReLU()
         self.fc2 = nn.Linear(128, 64)
+        self.relu2 = nn.ReLU()
         self.fc3 = nn.Linear(64, out_size)
-        self.sigmoid = nn.Sigmoid()
+        self.softmax = nn.Softmax(dim=-1)
 
     def forward(self, x):
         x = self.fc1(x)
+        x = self.relu1(x)
         x = self.fc2(x)
+        x = self.relu2(x)
         x = self.fc3(x)
-        x = self.sigmoid(x)
+        function_encoding = self.softmax(x[:, :-1])
+        x = torch.cat([function_encoding, x[:, -1:]], dim=-1)
         return x
 
 
@@ -201,6 +205,7 @@ class MultifunctionSubjectModelDataset(Dataset):
 
 
 parser = argparse.ArgumentParser()
+parser.add_argument("--repeat", help="Repeat number")
 parser.add_argument("--subject_model_dir", help="Folder containing the subject models")
 parser.add_argument("--model_type", type=str, help="Type of model to use.")
 parser.add_argument("--model_path", type=str, help="Path to save this model")
@@ -231,6 +236,11 @@ if __name__ == '__main__':
     args = parser.parse_args()
     for arg, value in vars(args).items():
         print(f'{arg}: {value}')
+
+    if args.functions is None or len(args.functions) == 0:
+        args.functions = FUNCTION_NAMES
+
+    random.seed(a=args.repeat)
 
     wandb.init(config=args, project='bounding-mi', entity='patrickaaleask', reinit=True)
 
@@ -266,4 +276,4 @@ if __name__ == '__main__':
     train_model(model, model_path, optimizer, args.epochs, train_dataloader, test_dataloader, test_dataset)
 
     print("Prediction sample", flush=True)
-    evaluate_model(model, test_dataloader)
+    evaluate_model(model, test_dataloader, args.functions)
