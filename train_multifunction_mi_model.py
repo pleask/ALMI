@@ -152,6 +152,7 @@ def get_matching_subject_models_names(subject_model_dir, functions=[], max_loss=
             if len(functions) != 0 and metadata['fn_name'] not in functions:
                 continue
             matching_subject_models_names.append(model_name)
+            return  matching_subject_models_names
         
     return matching_subject_models_names
 
@@ -163,9 +164,14 @@ def get_subject_model_metadata(subject_model_dir, subject_model_name):
 
 # This might run out of memory
 @cache
-def get_subject_model(subject_model_dir, subject_model_name):
+def get_subject_model(subject_model_dir, subject_model_name, device='cuda'):
     net = get_subject_net()
-    net.load_state_dict(torch.load(f"{subject_model_dir}/{subject_model_name}.pickle"))
+    if device=='cuda':
+        net.load_state_dict(torch.load(f"{subject_model_dir}/{subject_model_name}.pickle"))
+    else:
+        net.load_state_dict(
+            torch.load(f"{subject_model_dir}/{subject_model_name}.pickle", map_location=torch.device('cpu'))
+        )
     return net
 
 

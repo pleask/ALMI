@@ -32,7 +32,7 @@ if __name__ == '__main__':
             model_name, _ = line.split(' ', maxsplit=1)
             model_names.append(model_name)
 
-    with open(f'{SUBJECT_MODEL_DIR}/sparsity.txt', 'r') as sparsity_file:
+    with open(f'sparsity.txt', 'r') as sparsity_file:
         sparsity_model_names = set()
         for line in sparsity_file:
             s = line.strip()
@@ -44,5 +44,5 @@ if __name__ == '__main__':
             continue
         model = get_subject_model(model_name)
         sparsity = get_model_sparsity(model)
-        with open(f'{SUBJECT_MODEL_DIR}/sparsity.txt', 'a') as sparsity_file:
+        with open(f'sparsity.txt', 'a') as sparsity_file:
             sparsity_file.write(f'{model_name}, {sparsity}\n')
