@@ -136,7 +136,7 @@ class FeedForwardNN(nn.Module):
         return x
 
 
-def get_matching_subject_models_names(subject_model_dir, functions, max_loss, weight_decay):
+def get_matching_subject_models_names(subject_model_dir, functions=[], max_loss=1., weight_decay=0.):
     matching_subject_models_names = []
 
     index_file_path = f'{subject_model_dir}/index.txt'
@@ -149,7 +149,7 @@ def get_matching_subject_models_names(subject_model_dir, functions, max_loss, we
                 continue
             if metadata['loss'] > max_loss:
                 continue
-            if metadata['fn_name'] not in functions:
+            if len(functions) != 0 and metadata['fn_name'] not in functions:
                 continue
             matching_subject_models_names.append(model_name)
         
@@ -160,6 +160,13 @@ def get_matching_subject_models_names(subject_model_dir, functions, max_loss, we
 def get_subject_model_metadata(subject_model_dir, subject_model_name):
     with open(f'{subject_model_dir}/{subject_model_name}_metadata.json') as f:
         return json.load(f)
+
+# This might run out of memory
+@cache
+def get_subject_model(subject_model_dir, subject_model_name):
+    net = get_subject_net()
+    net.load_state_dict(torch.load(f"{subject_model_dir}/{subject_model_name}.pickle"))
+    return net
 
 
 class MultifunctionSubjectModelDataset(Dataset):
@@ -177,7 +184,7 @@ class MultifunctionSubjectModelDataset(Dataset):
     def __getitem__(self, idx):
         name = self.subject_model_names[idx]
 
-        model = self._get_subject_model(name).to(DEVICE)
+        model = get_subject_model(self._subject_model_dir, name).to(DEVICE)
         x = torch.concat(
             [param.detach().reshape(-1) for _, param in model.named_parameters()]
         ).to(DEVICE)
@@ -191,13 +198,6 @@ class MultifunctionSubjectModelDataset(Dataset):
         y = torch.tensor(one_hot).to(DEVICE)
 
         return x, y
-
-    # This might run out of memory
-    @cache
-    def _get_subject_model(self, subject_model_name):
-        net = get_subject_net()
-        net.load_state_dict(torch.load(f"{self._subject_model_dir}/{subject_model_name}.pickle"))
-        return net
 
     @property
     def out_size(self):
@@ -245,7 +245,7 @@ if __name__ == '__main__':
     wandb.init(config=args, project='bounding-mi', entity='patrickaaleask', reinit=True)
 
     print("Creating dataset", flush=True)
-    all_matching_subject_models = get_matching_subject_models_names(args.subject_model_dir, args.functions, args.max_loss, args.weight_decay)
+    all_matching_subject_models = get_matching_subject_models_names(args.subject_model_dir, functions=args.functions, max_loss=args.max_loss, weight_decay=args.weight_decay)
     print(f"Found {len(all_matching_subject_models)}", flush=True)
 
     train_sample_count = int(len(all_matching_subject_models) * MI_MODEL_TRAIN_SPLIT_RATIO)
