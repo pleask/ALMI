@@ -45,4 +45,4 @@ if __name__ == '__main__':
         model = get_subject_model(model_name)
         sparsity = get_model_sparsity(model)
         with open(f'{SUBJECT_MODEL_DIR}/sparsity.txt', 'a') as sparsity_file:
-            sparsity_file.write(f'{model_name}, {sparsity}')
+            sparsity_file.write(f'{model_name}, {sparsity}\n')
