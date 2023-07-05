@@ -12,6 +12,7 @@ import random
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
+from torch.nn.utils.prune import L1Unstructured
 
 import wandb
 
@@ -152,8 +153,6 @@ def get_matching_subject_models_names(subject_model_dir, functions=[], max_loss=
             if len(functions) != 0 and metadata['fn_name'] not in functions:
                 continue
             matching_subject_models_names.append(model_name)
-            return  matching_subject_models_names
-        
     return matching_subject_models_names
 
 
@@ -179,10 +178,11 @@ class MultifunctionSubjectModelDataset(Dataset):
     """
     Dataset of subject models that match the weight decay specified.
     """
-    def __init__(self, subject_model_dir, subject_model_names, functions):
+    def __init__(self, subject_model_dir, subject_model_names, functions, prune_amount=0.):
         self._subject_model_dir = subject_model_dir
         self.subject_model_names = subject_model_names
         self.functions = functions
+        self._prune_amount = prune_amount
 
     def __len__(self):
         return len(self.subject_model_names)
@@ -190,7 +190,14 @@ class MultifunctionSubjectModelDataset(Dataset):
     def __getitem__(self, idx):
         name = self.subject_model_names[idx]
 
-        model = get_subject_model(self._subject_model_dir, name).to(DEVICE)
+        model = get_subject_model(self._subject_model_dir, name, device=DEVICE).to(DEVICE)
+
+        # prune the weights of the model
+        if self._prune_amount > 0.:
+            pruner = L1Unstructured(self._prune_amount)
+            for name, param in model.named_parameters():
+                param.data = pruner.prune(param.data)
+
         x = torch.concat(
             [param.detach().reshape(-1) for _, param in model.named_parameters()]
         ).to(DEVICE)
@@ -235,6 +242,12 @@ parser.add_argument(
     help="Max usable loss for the subject models",
     default=0.001
 )
+parser.add_argument(
+    "--prune_amount",
+    type=float,
+    help="Amount by which to prune the subject models before training on them.",
+    default=0.
+)
 
 if __name__ == '__main__':
     os.environ["WAND_API_KEY"] = "dd685d7aa9b38a2289e5784a961b81e22fc4c735"
@@ -256,11 +269,11 @@ if __name__ == '__main__':
 
     train_sample_count = int(len(all_matching_subject_models) * MI_MODEL_TRAIN_SPLIT_RATIO)
     print("Creating training dataset")
-    train_dataset = MultifunctionSubjectModelDataset(args.subject_model_dir, all_matching_subject_models[:train_sample_count], args.functions)
+    train_dataset = MultifunctionSubjectModelDataset(args.subject_model_dir, all_matching_subject_models[:train_sample_count], args.functions, prune_amount=args.prune_amount)
     print("Creating training dataloader")
     train_dataloader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
     print("Creating testing dataset")
-    test_dataset = MultifunctionSubjectModelDataset(args.subject_model_dir, all_matching_subject_models[train_sample_count:], args.functions)
+    test_dataset = MultifunctionSubjectModelDataset(args.subject_model_dir, all_matching_subject_models[train_sample_count:], args.functions, prune_amount=args.prune_amount)
     print("Creating testing dataloader")
     test_dataloader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=True)
 
