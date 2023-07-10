@@ -4,6 +4,7 @@ For each subject model, calculates the sparsity of the network, ie. the proporti
 import torch
 from train_subject_models import get_subject_net
 
+EPSILON = 1e-6
 SUBJECT_MODEL_DIR = 'subject_models/'
 
 def get_subject_model(subject_model_name):
@@ -19,7 +20,7 @@ def get_model_sparsity(model):
     for name, param in model.named_parameters():
         if 'weight' in name: 
             total_params += param.numel()
-            zero_params += torch.sum(param == 0).item()
+            zero_params += torch.sum(param < EPSILON).item()
 
     sparsity = zero_params / total_params * 100 
     return sparsity

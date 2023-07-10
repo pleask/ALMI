@@ -49,7 +49,7 @@ if __name__ == '__main__':
             models, fns, metadatas = [], [], []
             for name in names:
                 model = get_subject_model(args.subject_model_dir, name, device='cpu')
-                models.append(prune(model, amount=args.amount))
+                models.append(prune(model, amount=amount))
                 metadata = get_subject_model_metadata(args.subject_model_dir, name)
                 metadatas.append(metadata)
                 fns.append(get_subject_fn(metadata['fn_name'], metadata['parameter']))
