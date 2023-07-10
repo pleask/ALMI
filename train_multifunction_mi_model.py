@@ -195,7 +195,7 @@ class MultifunctionSubjectModelDataset(Dataset):
         # prune the weights of the model
         if self._prune_amount > 0.:
             pruner = L1Unstructured(self._prune_amount)
-            for name, param in model.named_parameters():
+            for _, param in model.named_parameters():
                 param.data = pruner.prune(param.data)
 
         x = torch.concat(
