@@ -266,6 +266,7 @@ if __name__ == '__main__':
     print("Creating dataset", flush=True)
     all_matching_subject_models = get_matching_subject_models_names(args.subject_model_dir, functions=args.functions, max_loss=args.max_loss, weight_decay=args.weight_decay)
     print(f"Found {len(all_matching_subject_models)}", flush=True)
+    wandb.config['subject_model_count'] = len(all_matching_subject_models) 
 
     train_sample_count = int(len(all_matching_subject_models) * MI_MODEL_TRAIN_SPLIT_RATIO)
     print("Creating training dataset")
