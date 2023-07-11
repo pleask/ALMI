@@ -7,3 +7,4 @@ subject_models/
 mi_models/
 mi_models_out/
 myenv/
+wandb/

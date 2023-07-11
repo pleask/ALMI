@@ -34,6 +34,10 @@ class Task(ABC):
     def output_shape(self):
         pass
 
+    @property
+    @abstractmethod
+    def mi_output_shape(self):
+        pass
 
 
 FUNCTION_NAMES = [
@@ -61,8 +65,12 @@ class SimpleFunctionRecoveryTask(Task):
         return SimpleFunctionRecoveryExample(fn_name, param, seed) 
 
     @property
+    def mi_output_shape(self):
+        return (6, )
+
+    @property
     def input_shape(self):
-        return (1,)
+        return (1, )
 
     @property
     def output_shape(self):
@@ -72,6 +80,10 @@ class SimpleFunctionRecoveryTask(Task):
 class Example(Dataset, ABC):
     @abstractmethod
     def get_metadata(self):
+        pass
+
+    @abstractmethod
+    def get_target(self):
         pass
 
     
@@ -117,3 +129,15 @@ class SimpleFunctionRecoveryExample(Example):
             return partial(lambda c, x: torch.min(torch.full_like(x, c), x), param)
         else:
             raise ValueError(f'Invalid function name: {fn_name}')
+    
+    def get_target(self):
+        one_hot = [0.] * len(FUNCTION_NAMES)
+        one_hot[FUNCTION_NAMES.index(self.fn_name)] = 1.
+        one_hot.append(self.param)
+        return torch.tensor(one_hot)
+
+
+def get_task_class(name):
+    if name == 'SimpleFunctionRecoveryTask':
+        return SimpleFunctionRecoveryTask
+    raise ValueError('Invalid task.')

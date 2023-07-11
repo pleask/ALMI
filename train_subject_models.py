@@ -5,30 +5,21 @@ import random
 import json
 import argparse
 import uuid
+from time import gmtime, strftime
 
 from torch.utils.data import DataLoader
 
-from auto_mi.tasks import SimpleFunctionRecoveryTask, VAL
-from auto_mi.models import SimpleFunctionRecoveryModel
+from auto_mi.tasks import VAL, get_task_class
+from auto_mi.models import get_subject_model_class
 
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-def train_subject_nets(nets, task, epochs, batch_size=1000, weight_decay=0):
+def train_subject_nets(nets, task, epochs=50, batch_size=1000, weight_decay=0):
     """
     Trains subject networks in parallel. From brief testing it seems 5 subject nets
     can be trained in parallel, but it's up to the client to check this.
-
-    epochs: The number of epochs for training the subject networks.
-    Ran a grid search for epochs on LAYER_SIZE = 25 with the following results
-    200 epochs achieved avg loss of 15.250823020935059
-    500 epochs achieved avg loss of 6.639222621917725
-    1000 epochs achieved avg loss of 1.6066440343856812
-    2000 epochs achieved avg loss of 2.3655612468719482
-    5000 epochs achieved avg loss of 0.7449145317077637
-    10000 epochs achieved avg loss of 0.28002771735191345
-    Also ran this for 20k epochs and the performance was not better than 10k
     """
     training_data = [iter(DataLoader(task.get_dataset(i), batch_size=batch_size, num_workers=32)) for i in range(len(nets))]
 
@@ -36,8 +27,7 @@ def train_subject_nets(nets, task, epochs, batch_size=1000, weight_decay=0):
     optimizers = [optim.Adam(net.parameters(), lr=0.01, weight_decay=weight_decay) for net in nets]
 
     for epoch in range(epochs):
-        if epoch % 1000 == 0:
-            print(f"Epoch {epoch} of {epochs}", flush=True)
+        print(f"Epoch {epoch} of {epochs}", flush=True)
         while True:
             try:
                 for net, data, optimizer in zip(parallel_nets, training_data, optimizers):
@@ -68,14 +58,6 @@ def evaluate_subject_nets(nets, task, batch_size=1000):
             outputs = net(inputs)
         loss = task.criterion(outputs, labels).detach().cpu().item()
         losses.append(loss)
-
-        print(f"SAMPLE PREDICTIONS (label, prediction) for {example.get_metadata()}", flush=True)
-        [
-            print(l.detach().cpu().item(), o.detach().cpu().item(), flush=True)
-            for l, o in zip(labels[:10], outputs[:10])
-        ]
-        print()
-
     return losses
 
 
@@ -120,15 +102,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
     random.seed(a=args.seed)
 
-    if args.task == "SimpleFunctionRecoveryTask":
-        task = SimpleFunctionRecoveryTask(args.count)
-    else:
-        raise ValueError("Invalid task specified")
-
-    if args.model == "SimpleFunctionRecoveryModel":
-        model = SimpleFunctionRecoveryModel
-    else:
-        raise ValueError("Invalid model specified")
+    task = get_task_class(args.task)(args.seed)
+    model = get_subject_model_class(args.model)
 
     print("Training...")
     nets = [model(task) for _ in range(args.count)]
@@ -143,6 +118,9 @@ if __name__ == "__main__":
         md.update(task.get_dataset(i).get_metadata())
         md["loss"] = losses[i]
         md["id"] = str(net_id)
+        md["time"] = strftime("%Y-%m-%d %H:%M:%S", gmtime())
+        md["example_idx"] = i
+
         with open(f'{args.path}/index.txt', 'a') as md_file:
             md_file.write(json.dumps(md) + '\n')
 

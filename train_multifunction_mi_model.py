@@ -5,7 +5,6 @@ the coefficient.
 import argparse
 from functools import cache
 import json
-import math
 import os
 import random
 
@@ -13,10 +12,10 @@ import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 from torch.nn.utils.prune import L1Unstructured
-
 import wandb
 
-from train_subject_models import get_subject_net, FUNCTION_NAMES
+from auto_mi.models import FeedForwardNN, Transformer, get_subject_model_class
+from auto_mi.tasks import get_task_class
 
 os.environ["WANDB_SILENT"] = "true"
 
@@ -36,9 +35,8 @@ def train_model(model, model_path, optimizer, epochs, train_dataloader, test_dat
         test_loss = 0.0
         with torch.no_grad():
             for inputs, targets in test_dataloader:
-                targets = targets.to(DEVICE)
-                outputs = model(inputs)
-                loss = MI_CRITERION(outputs, targets)
+                outputs = model(inputs.to(DEVICE))
+                loss = MI_CRITERION(outputs, targets.to(DEVICE))
                 test_loss += loss.item() * inputs.size(0)
         avg_loss = test_loss / len(test_dataset)
         log = log | {'validation_loss': avg_loss}
@@ -46,8 +44,8 @@ def train_model(model, model_path, optimizer, epochs, train_dataloader, test_dat
         for (inputs, targets) in train_dataloader:
             log = log | {'loss': loss}
             optimizer.zero_grad()
-            outputs = model(inputs)
-            loss = MI_CRITERION(outputs, targets)
+            outputs = model(inputs.to(DEVICE))
+            loss = MI_CRITERION(outputs, targets.to(DEVICE))
             loss.backward()
             optimizer.step()
 
@@ -55,116 +53,44 @@ def train_model(model, model_path, optimizer, epochs, train_dataloader, test_dat
 
         torch.save(model.state_dict(), model_path)
 
-def evaluate_model(model, test_dataloader, functions):
+def evaluate_model(model, test_dataloader):
     model.eval()
     with torch.no_grad():
         for inputs, targets in test_dataloader:
-            print('-----')
-            outputs = model(inputs)
-            for target, output in zip(targets, outputs.squeeze()):
-                print(functions[torch.argmax(target[:5]).item()], target[-1].detach().item(), output[-1].detach().item())
+            print('--- Sample output ---')
+            outputs = model(inputs.to(DEVICE))
+            for target, output in zip(targets, outputs.to(DEVICE)):
+                print(target.detach(), output.detach())
             break
 
-class PositionalEncoding(nn.Module):
-    def __init__(self, hidden_size, max_seq_len=5000, dropout=0.1):
-        super().__init__()
 
-        self.dropout = nn.Dropout(p=dropout)
-
-        pe = torch.zeros(max_seq_len, hidden_size)
-        position = torch.arange(0, max_seq_len, dtype=torch.float).unsqueeze(1)
-        div_term = torch.exp(
-            torch.arange(0, hidden_size, 2).float() * (-math.log(10000.0) / hidden_size)
-        )
-        pe[:, 0::2] = torch.sin(position * div_term)
-        pe[:, 1::2] = torch.cos(position * div_term)
-        pe = pe.unsqueeze(0).transpose(0, 1)
-        self.register_buffer("pe", pe)
-
-    def forward(self, x):
-        x = x + self.pe[: x.size(0), :]
-        return self.dropout(x)
-
-
-class Transformer(nn.Module):
-    def __init__(
-        self,
-        input_size,
-        output_size,
-        num_layers=6,
-        hidden_size=256,
-        num_heads=8,
-        dropout=0.1,
-    ):
-        super().__init__()
-
-        self.embedding = nn.Linear(input_size, hidden_size)
-        self.pos_encoding = PositionalEncoding(hidden_size, dropout=dropout)
-
-        encoder_layer = nn.TransformerEncoderLayer(hidden_size, num_heads)
-        self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers)
-
-        self.output_layer = nn.Linear(hidden_size, output_size)
-
-    def forward(self, x):
-        x = self.embedding(x)
-        x = self.pos_encoding(x)
-        x = self.transformer_encoder(x)
-        x = self.output_layer(
-            x.mean(dim=0)
-        )  # use mean pooling to obtain a single output value
-        return x
-
-
-class FeedForwardNN(nn.Module):
-    def __init__(self, out_size, layer_scale=1):
-        super().__init__()
-        self.fc1 = nn.Linear(SUBJECT_MODEL_PARAMETER_COUNT, int(128*layer_scale))
-        self.relu1 = nn.ReLU()
-        self.fc2 = nn.Linear(int(128*layer_scale), int(64*layer_scale))
-        self.relu2 = nn.ReLU()
-        self.fc3 = nn.Linear(int(64*layer_scale), out_size)
-        self.softmax = nn.Softmax(dim=-1)
-
-    def forward(self, x):
-        x = self.fc1(x)
-        x = self.relu1(x)
-        x = self.fc2(x)
-        x = self.relu2(x)
-        x = self.fc3(x)
-        function_encoding = self.softmax(x[:, :-1])
-        x = torch.cat([function_encoding, x[:, -1:]], dim=-1)
-        return x
-
-
-def get_matching_subject_models_names(subject_model_dir, functions=[], max_loss=1., weight_decay=0.):
+def get_matching_subject_models_names(subject_model_dir, task='SimpleFunctionRecoveryTask', max_loss=1., weight_decay=0.):
     matching_subject_models_names = []
 
     index_file_path = f'{subject_model_dir}/index.txt'
     with open(index_file_path, 'r') as index_file:
         for line in index_file:
             line = line.strip()
-            model_name, metadata_string = line.split(' ', maxsplit=1)
-            metadata = json.loads(metadata_string)
+            metadata = json.loads(line)
+            if metadata['task'] != task:
+                continue
             if metadata['weight_decay'] != weight_decay:
                 continue
             if metadata['loss'] > max_loss:
                 continue
-            if len(functions) != 0 and metadata['fn_name'] not in functions:
-                continue
-            matching_subject_models_names.append(model_name)
+            matching_subject_models_names.append(metadata['id'])
     return matching_subject_models_names
 
 
 @cache
+# TODO: use the index file for this
 def get_subject_model_metadata(subject_model_dir, subject_model_name):
     with open(f'{subject_model_dir}/{subject_model_name}_metadata.json') as f:
         return json.load(f)
 
 # This might run out of memory
 @cache
-def get_subject_model(subject_model_dir, subject_model_name, device='cuda'):
-    net = get_subject_net()
+def get_subject_model(net, subject_model_dir, subject_model_name, device='cuda'):
     if device=='cuda':
         net.load_state_dict(torch.load(f"{subject_model_dir}/{subject_model_name}.pickle"))
     else:
@@ -175,22 +101,25 @@ def get_subject_model(subject_model_dir, subject_model_name, device='cuda'):
 
 
 class MultifunctionSubjectModelDataset(Dataset):
-    """
-    Dataset of subject models that match the weight decay specified.
-    """
-    def __init__(self, subject_model_dir, subject_model_names, functions, prune_amount=0.):
+    def __init__(self, subject_model_dir, subject_model_ids, prune_amount=0.):
         self._subject_model_dir = subject_model_dir
-        self.subject_model_names = subject_model_names
-        self.functions = functions
+        self.subject_model_ids = subject_model_ids
         self._prune_amount = prune_amount
 
+        self.metadata = self._index_metadata()
+
     def __len__(self):
-        return len(self.subject_model_names)
+        return len(self.subject_model_ids)
 
     def __getitem__(self, idx):
-        name = self.subject_model_names[idx]
+        name = self.subject_model_ids[idx]
+        metadata = self.metadata[name]
 
-        model = get_subject_model(self._subject_model_dir, name, device=DEVICE).to(DEVICE)
+        task = get_task_class(metadata['task'])(metadata['seed'])
+        example = task.get_dataset(metadata['example_idx'])
+        y = example.get_target()
+
+        model = get_subject_model(get_subject_model_class(metadata['model'])(task), self._subject_model_dir, name)
 
         # prune the weights of the model
         if self._prune_amount > 0.:
@@ -202,19 +131,23 @@ class MultifunctionSubjectModelDataset(Dataset):
             [param.detach().reshape(-1) for _, param in model.named_parameters()]
         ).to(DEVICE)
 
-        metadata = get_subject_model_metadata(self._subject_model_dir, name)
-        fn_name = metadata['fn_name']
-        parameter = metadata['parameter']
-        one_hot = [0.] * len(self.functions)
-        one_hot[self.functions.index(fn_name)] = 1.
-        one_hot.append(parameter)
-        y = torch.tensor(one_hot).to(DEVICE)
-
         return x, y
 
+    def _index_metadata(self):
+        metadata = {}
+        with open(f'{self._subject_model_dir}/index.txt', 'r') as f:
+            for line in f:
+                md = json.loads(line.strip())
+                metadata[md['id']] = md
+        return metadata
+
     @property
-    def out_size(self):
-        return len(self.functions) + 1
+    def model_param_count(self):
+        return self[0][0].shape[0]
+    
+    @property
+    def output_shape(self):
+        return self[0][1].shape
 
 
 parser = argparse.ArgumentParser()
@@ -223,13 +156,13 @@ parser.add_argument("--subject_model_dir", help="Folder containing the subject m
 parser.add_argument("--model_type", type=str, help="Type of model to use.")
 parser.add_argument("--model_path", type=str, help="Path to save this model")
 parser.add_argument("--load_model", type=str, help="Path from which to load a model. Overrides model_path argument. Use in conjunction with --epochs=0 to just evaluate the model.")
-parser.add_argument('--functions', nargs='+', type=str, help='List of subject functions. If empty, will use all.')
 parser.add_argument(
     "--epochs",
     type=int,
     help="Number of epochs for which to train.",
     default=1000,
 )
+parser.add_argument('--task', default='SimpleFunctionRecoveryTask', type=str, help='The MI task to learn.')
 parser.add_argument(
     "--weight_decay",
     type=float,
@@ -262,32 +195,29 @@ if __name__ == '__main__':
     for arg, value in vars(args).items():
         print(f'{arg}: {value}')
 
-    if args.functions is None or len(args.functions) == 0:
-        args.functions = FUNCTION_NAMES
-
     random.seed(a=args.repeat)
-
     wandb.init(config=args, project='bounding-mi', entity='patrickaaleask', reinit=True)
 
-    print("Creating dataset", flush=True)
-    all_matching_subject_models = get_matching_subject_models_names(args.subject_model_dir, functions=args.functions, max_loss=args.max_loss, weight_decay=args.weight_decay)
+    print("Creating dataset...", flush=True)
+    all_matching_subject_models = get_matching_subject_models_names(args.subject_model_dir, task=args.task, max_loss=args.max_loss, weight_decay=args.weight_decay)
     print(f"Found {len(all_matching_subject_models)}", flush=True)
     wandb.config['subject_model_count'] = len(all_matching_subject_models) 
 
     train_sample_count = int(len(all_matching_subject_models) * MI_MODEL_TRAIN_SPLIT_RATIO)
     print("Creating training dataset")
-    train_dataset = MultifunctionSubjectModelDataset(args.subject_model_dir, all_matching_subject_models[:train_sample_count], args.functions, prune_amount=args.prune_amount)
+    train_dataset = MultifunctionSubjectModelDataset(args.subject_model_dir, all_matching_subject_models[:train_sample_count], prune_amount=args.prune_amount)
     print("Creating training dataloader")
     train_dataloader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
     print("Creating testing dataset")
-    test_dataset = MultifunctionSubjectModelDataset(args.subject_model_dir, all_matching_subject_models[train_sample_count:], args.functions, prune_amount=args.prune_amount)
+    test_dataset = MultifunctionSubjectModelDataset(args.subject_model_dir, all_matching_subject_models[train_sample_count:], prune_amount=args.prune_amount)
     print("Creating testing dataloader")
     test_dataloader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=True)
 
     print("Creating model", flush=True)
     model_path = args.model_path
 
-    model = FeedForwardNN(train_dataset.out_size, layer_scale=args.layer_scale).to(DEVICE)
+    task = get_task_class(args.task)
+    model = FeedForwardNN(train_dataset.model_param_count, train_dataset.output_shape[0], layer_scale=args.layer_scale).to(DEVICE)
     if args.model_type == 'transformer':
         model = Transformer(SUBJECT_MODEL_PARAMETER_COUNT, train_dataset.out_size, num_heads=6, hidden_size=240).to(DEVICE)
 
@@ -302,4 +232,4 @@ if __name__ == '__main__':
     train_model(model, model_path, optimizer, args.epochs, train_dataloader, test_dataloader, test_dataset)
 
     print("Prediction sample", flush=True)
-    evaluate_model(model, test_dataloader, args.functions)
+    evaluate_model(model, test_dataloader)
