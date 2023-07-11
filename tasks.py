@@ -4,8 +4,7 @@ import random
 
 import torch
 from torch.utils.data import Dataset
-
-from train_subject_models import FUNCTION_NAMES
+import torch.nn as nn
 
 TRAIN = 'train'
 VAL = 'val'
@@ -26,12 +25,20 @@ class Task(ABC):
         pass
 
 
+FUNCTION_NAMES = [
+        'addition',
+        'multiplication',
+        'sigmoid',
+        'exponent',
+        'min',
+]
+
 class SimpleFunctionRecoveryTask(Task):
-    function_names = FUNCTION_NAMES
+    criterion = nn.MSELoss()
 
     def get_dataset(self, i, type=TRAIN):
         random_generator = random.Random(self.seed + i)
-        fn_name = random_generator.choice(self.function_names)
+        fn_name = random_generator.choice(FUNCTION_NAMES)
         param = random_generator.random()
 
         seed = param
@@ -40,7 +47,7 @@ class SimpleFunctionRecoveryTask(Task):
         elif type == TEST:
             seed += 2
 
-        return SimpleFunctionRecoveryExample(fn_name, param) 
+        return SimpleFunctionRecoveryExample(fn_name, param, seed) 
 
 
 class Example(Dataset, ABC):
@@ -50,7 +57,7 @@ class Example(Dataset, ABC):
 
     
 class SimpleFunctionRecoveryExample(Example):
-    size = 1e9
+    size = 1000000
 
     def __init__(self, fn_name, param, seed):
         self.fn_name = fn_name
@@ -62,7 +69,7 @@ class SimpleFunctionRecoveryExample(Example):
         random_generator = random.Random(self.seed + i)
         x = random_generator.random()
         y = self.function(x)
-        return x, y
+        return torch.tensor([x]), torch.tensor([y])
 
     def __len__(self):
         return self.size
@@ -70,8 +77,7 @@ class SimpleFunctionRecoveryExample(Example):
     def get_metadata(self):
         return {'fn_name': self.fn_name, 'param': self.param}
 
-    @staticmethod
-    def get_subject_fn(fn_name, param):
+    def get_subject_fn(self, fn_name, param):
         """
         Returns a torch function that implements the specified function.
 

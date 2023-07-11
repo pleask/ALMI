@@ -5,7 +5,6 @@ import random
 import json
 import argparse
 import uuid
-from functools import partial
 
 from torch.utils.data import DataLoader
 
@@ -29,32 +28,6 @@ Layer size 100 with 10401 total parameters achieved min loss of 0.05302942544221
 network that performs better
 """
 SUBJECT_LAYER_SIZE = 25
-"""
-The batch size when training the subject neworks.
-
-This is nowhere the limit for the batch size in terms of GPU memory, but the
-difference in training times between this batch size and the maximum possible
-batch size was small, and this smaller batch size means we can train a number
-of networks in parallel on the same GPU.
-"""
-SUBJECT_BATCH_SIZE = 2**15
-SUBJECT_CRITERION = nn.MSELoss()
-
-
-get_exponent = lambda: random.random() * 10.0
-
-
-def get_subject_data(fn, batch_count=2**10):
-    """
-    Generate random data on the GPU for training the subject networks.
-    """
-    x = torch.rand((batch_count, SUBJECT_BATCH_SIZE), device=DEVICE) * 10.0
-    x = torch.unsqueeze(x, dim=1)
-    y = fn(x)
-    data = torch.empty((x.shape[0], 2, x.shape[2]), device=DEVICE, dtype=torch.float32)
-    torch.cat((x, y), dim=1, out=data)
-    data = torch.unsqueeze(data, dim=3)
-    return data
 
 
 def get_subject_net():
@@ -72,7 +45,7 @@ def get_subject_net():
     ).to(DEVICE)
 
 
-def train_subject_nets(nets, task, epochs, batch_size=1e6, weight_decay=0):
+def train_subject_nets(nets, task, epochs, batch_size=1000, weight_decay=0):
     """
     Trains subject networks in parallel. From brief testing it seems 5 subject nets
     can be trained in parallel, but it's up to the client to check this.
@@ -93,51 +66,47 @@ def train_subject_nets(nets, task, epochs, batch_size=1e6, weight_decay=0):
     optimizers = [optim.Adam(net.parameters(), lr=0.01, weight_decay=weight_decay) for net in nets]
 
     for epoch in range(epochs):
-        if epoch % 1000 == 0:
-            print(f"Epoch {epoch} of {epochs}", flush=True)
-        for _ in range(len(training_data[0])):
-            for net, data, optimizer in zip(parallel_nets, training_data, optimizers):
-                optimizer.zero_grad()
-                inputs, labels = next(data)
-                output = net(inputs)
-                loss = SUBJECT_CRITERION(output, labels)
-                loss.backward()
-                optimizer.step()
+        # if epoch % 1000 == 0:
+        print(f"Epoch {epoch} of {epochs}", flush=True)
+        while True:
+            try:
+                for net, data, optimizer in zip(parallel_nets, training_data, optimizers):
+                    optimizer.zero_grad()
+                    inputs, labels = next(data)
+                    inputs, labels = inputs.to(DEVICE), labels.to(DEVICE)
+                    output = net(inputs)
+                    loss = task.criterion(output, labels)
+                    loss.backward()
+                    optimizer.step()
+            except StopIteration:
+                break
 
 
-def evaluate_subject_nets(nets, task):
+def evaluate_subject_nets(nets, task, batch_size=1000):
     """
     Evaluates the subject net using a new random dataset.
     """
     losses = []
     examples = [task.get_dataset(i, type=VAL) for i in range(len(nets))]
     for net, example in zip(nets, examples):
-        data = DataLoader(example)
+        data = DataLoader(example, batch_size=batch_size)
         inputs, labels = next(iter(data))
         inputs = inputs.to(DEVICE)
         labels = labels.to(DEVICE)
         net.eval()
         with torch.no_grad():
             outputs = net(inputs)
-        loss = SUBJECT_CRITERION(outputs, labels).detach().cpu().item()
+        loss = task.criterion(outputs, labels).detach().cpu().item()
         losses.append(loss)
 
-    print("SAMPLE PREDICTIONS (label, prediction)", flush=True)
-    [
-        print(l.detach().cpu().item(), o.detach().cpu().item(), flush=True)
-        for l, o in zip(labels.squeeze()[:10], outputs.squeeze()[:10])
-    ]
-    print()
+        print(f"SAMPLE PREDICTIONS (label, prediction) for {example.get_metadata()}", flush=True)
+        [
+            print(l.detach().cpu().item(), o.detach().cpu().item(), flush=True)
+            for l, o in zip(labels[:10], outputs[:10])
+        ]
+        print()
 
     return losses
-
-FUNCTION_NAMES = [
-        'addition',
-        'multiplication',
-        'sigmoid',
-        'exponent',
-        'min',
-]
 
 
 parser = argparse.ArgumentParser(
@@ -165,7 +134,7 @@ parser.add_argument(
     "--epochs", type=int, help="The number of epochs for which to train the models."
 )
 parser.add_argument(
-    "--weight_decay", type=float, help="Weight decay for the adam optimiser."
+    "--weight_decay", default=0., type=float, help="Weight decay for the adam optimiser."
 )
 
 get_model_path = lambda path, net_idx: f"{path}/{net_idx}.pickle"
@@ -182,7 +151,7 @@ if __name__ == "__main__":
 
     print("Training...")
     nets = [get_subject_net() for _ in range(args.count)]
-    train_subject_nets(nets, task, args.epochs, args.weight_decay)
+    train_subject_nets(nets, task, args.epochs, weight_decay=args.weight_decay)
 
     print("Evaluating models")
     losses = evaluate_subject_nets(nets, task)
