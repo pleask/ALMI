@@ -9,7 +9,7 @@ import uuid
 from torch.utils.data import DataLoader
 
 from auto_mi.tasks import SimpleFunctionRecoveryTask, VAL
-from auto_mi.models import get_auto_model
+from auto_mi.models import SimpleFunctionRecoveryModel
 
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -30,7 +30,7 @@ def train_subject_nets(nets, task, epochs, batch_size=1000, weight_decay=0):
     10000 epochs achieved avg loss of 0.28002771735191345
     Also ran this for 20k epochs and the performance was not better than 10k
     """
-    training_data = [iter(DataLoader(task.get_dataset(i), batch_size=batch_size)) for i in range(len(nets))]
+    training_data = [iter(DataLoader(task.get_dataset(i), batch_size=batch_size, num_workers=32)) for i in range(len(nets))]
 
     parallel_nets = [nn.DataParallel(net) for net in nets]
     optimizers = [optim.Adam(net.parameters(), lr=0.01, weight_decay=weight_decay) for net in nets]
@@ -101,6 +101,12 @@ parser.add_argument(
     help='The task on which to train the subject models.',
 )
 parser.add_argument(
+    "--model",
+    default="SimpleFunctionRecoveryModel",
+    type=str,
+    help='Which subject model to use.',
+)
+parser.add_argument(
     "--epochs", type=int, help="The number of epochs for which to train the models."
 )
 parser.add_argument(
@@ -108,36 +114,37 @@ parser.add_argument(
 )
 
 get_model_path = lambda path, net_idx: f"{path}/{net_idx}.pickle"
-get_metadata_path = lambda path, net_idx: f"{path}/{net_idx}_metadata.json"
 
 if __name__ == "__main__":
     print('Parsing args')
     args = parser.parse_args()
     random.seed(a=args.seed)
 
-    task = SimpleFunctionRecoveryTask(args.count)
-    if args.task != "SimpleFunctionRecoveryTask":
+    if args.task == "SimpleFunctionRecoveryTask":
+        task = SimpleFunctionRecoveryTask(args.count)
+    else:
         raise ValueError("Invalid task specified")
 
+    if args.model == "SimpleFunctionRecoveryModel":
+        model = SimpleFunctionRecoveryModel
+    else:
+        raise ValueError("Invalid model specified")
+
     print("Training...")
-    nets = [get_auto_model(task) for _ in range(args.count)]
+    nets = [model(task) for _ in range(args.count)]
     train_subject_nets(nets, task, args.epochs, weight_decay=args.weight_decay)
 
     print("Evaluating models")
     losses = evaluate_subject_nets(nets, task)
 
-    metadata = []
     for i in range(args.count):
+        net_id = uuid.uuid4()
         md = vars(args)
         md.update(task.get_dataset(i).get_metadata())
         md["loss"] = losses[i]
-        metadata.append(md)
+        md["id"] = str(net_id)
+        with open(f'{args.path}/index.txt', 'a') as md_file:
+            md_file.write(json.dumps(md) + '\n')
 
-    print("Saving models")
-    for i, (net, md) in enumerate(zip(nets, metadata)):
-        net_id = uuid.uuid4()
         model_path = get_model_path(args.path, net_id) 
-        md_path = get_metadata_path(args.path, net_id)
-        torch.save(net.state_dict(), model_path)
-        with open(md_path, "w") as json_file:
-            json.dump(md, json_file)
+        torch.save(nets[i].state_dict(), model_path)
