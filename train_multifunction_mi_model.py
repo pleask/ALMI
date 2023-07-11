@@ -287,7 +287,7 @@ if __name__ == '__main__':
     print("Creating model", flush=True)
     model_path = args.model_path
 
-    model = FeedForwardNN(train_dataset.out_size).to(DEVICE)
+    model = FeedForwardNN(train_dataset.out_size, layer_scale=args.layer_scale).to(DEVICE)
     if args.model_type == 'transformer':
         model = Transformer(SUBJECT_MODEL_PARAMETER_COUNT, train_dataset.out_size, num_heads=6, hidden_size=240).to(DEVICE)
 
