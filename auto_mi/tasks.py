@@ -88,7 +88,7 @@ class Example(Dataset, ABC):
 
     
 class SimpleFunctionRecoveryExample(Example):
-    size = 1000000
+    size = 100000
 
     def __init__(self, fn_name, param, seed):
         self.fn_name = fn_name
