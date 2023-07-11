@@ -7,6 +7,10 @@ import argparse
 import uuid
 from functools import partial
 
+from torch.utils.data import DataLoader
+
+from tasks import SimpleFunctionRecoveryTask, VAL
+
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 """
 The layer size of the subject networks.
@@ -68,7 +72,7 @@ def get_subject_net():
     ).to(DEVICE)
 
 
-def train_subject_nets(nets, fns, epochs, weight_decay=0):
+def train_subject_nets(nets, task, epochs, batch_size=1e6, weight_decay=0):
     """
     Trains subject networks in parallel. From brief testing it seems 5 subject nets
     can be trained in parallel, but it's up to the client to check this.
@@ -83,30 +87,33 @@ def train_subject_nets(nets, fns, epochs, weight_decay=0):
     10000 epochs achieved avg loss of 0.28002771735191345
     Also ran this for 20k epochs and the performance was not better than 10k
     """
-    optimizers = [optim.Adam(net.parameters(), lr=0.01, weight_decay=weight_decay) for net in nets]
-    training_data = [get_subject_data(fn) for fn in fns]
+    training_data = [iter(DataLoader(task.get_dataset(i), batch_size=batch_size)) for i in range(len(nets))]
+
     parallel_nets = [nn.DataParallel(net) for net in nets]
+    optimizers = [optim.Adam(net.parameters(), lr=0.01, weight_decay=weight_decay) for net in nets]
+
     for epoch in range(epochs):
         if epoch % 1000 == 0:
             print(f"Epoch {epoch} of {epochs}", flush=True)
-        for batch_idx in range(len(training_data)):
+        for _ in range(len(training_data[0])):
             for net, data, optimizer in zip(parallel_nets, training_data, optimizers):
                 optimizer.zero_grad()
-                inputs, labels = data[batch_idx]
+                inputs, labels = next(data)
                 output = net(inputs)
                 loss = SUBJECT_CRITERION(output, labels)
                 loss.backward()
                 optimizer.step()
 
 
-def evaluate_subject_nets(nets, fns):
+def evaluate_subject_nets(nets, task):
     """
     Evaluates the subject net using a new random dataset.
     """
     losses = []
-    for net, fn in zip(nets, fns):
-        eval_data = get_subject_data(fn, batch_count=1)[0]
-        inputs, labels = eval_data
+    examples = [task.get_dataset(i, type=VAL) for i in range(len(nets))]
+    for net, example in zip(nets, examples):
+        data = DataLoader(example)
+        inputs, labels = next(iter(data))
         inputs = inputs.to(DEVICE)
         labels = labels.to(DEVICE)
         net.eval()
@@ -132,28 +139,6 @@ FUNCTION_NAMES = [
         'min',
 ]
 
-def get_subject_fn(fn_name, param):
-    """
-    Returns a torch function that implements the specified function.
-
-    The functions map onto the range [0, 100] (give or take).
-
-    fn_name: the name of the function
-    param: a float between 0 and 1
-    """
-    if fn_name == FUNCTION_NAMES[0]:
-        return partial(lambda c, x: x + c * 10 * 5, param)
-    elif fn_name == FUNCTION_NAMES[1]:
-        return partial(lambda c, x: x * c * 10, param)
-    elif fn_name == FUNCTION_NAMES[2]:
-        return partial(lambda c, x: 20*(1/(1+torch.exp(-(x+c)))-0.5), param)
-    elif fn_name == FUNCTION_NAMES[3]:
-        return partial(lambda c, x: x ** (c / 2), param)
-    elif fn_name == FUNCTION_NAMES[4]:
-        return partial(lambda c, x: torch.min(torch.full_like(x, c), x), param)
-    else:
-        raise ValueError(f'Invalid function name: {fn_name}')
-
 
 parser = argparse.ArgumentParser(
     description="Trains subject models, ie. the models that implement the labeling function."
@@ -171,9 +156,10 @@ parser.add_argument(
     help="The random seed to use. Should be different for all runs of this script within an experiment, and the same for each run across experiments.",
 )
 parser.add_argument(
-    "--fn_name",
+    "--task",
+    default="SimpleFunctionRecoveryTask",
     type=str,
-    help='The function to train the subject nets on. Eg. "addition" for addition.',
+    help='The task on which to train the subject models.',
 )
 parser.add_argument(
     "--epochs", type=int, help="The number of epochs for which to train the models."
@@ -190,18 +176,23 @@ if __name__ == "__main__":
     args = parser.parse_args()
     random.seed(a=args.seed)
 
-    print("Initialising networks")
+    task = SimpleFunctionRecoveryTask(args.count)
+    if args.task != "SimpleFunctionRecoveryTask":
+        raise ValueError("Invalid task specified")
+
+    print("Training...")
     nets = [get_subject_net() for _ in range(args.count)]
-    parameters = [random.random() for _ in range(args.count)]
-    fns = [get_subject_fn(args.fn_name, parameter) for parameter in parameters]
-    train_subject_nets(nets, fns, args.epochs, args.weight_decay)
+    train_subject_nets(nets, task, args.epochs, args.weight_decay)
 
     print("Evaluating models")
-    losses = evaluate_subject_nets(nets, fns)
-    metadata = [
-        {"fn_name": args.fn_name, "parameter": parameter, "loss": loss, "seed": args.seed, "weight_decay": args.weight_decay, "epochs": args.epochs}
-        for parameter, loss in zip(parameters, losses)
-    ]
+    losses = evaluate_subject_nets(nets, task)
+
+    metadata = []
+    for i in range(args.count):
+        md = vars(args)
+        md.update(task.get_dataset(i).get_metadata())
+        md["loss"] = losses[i]
+        metadata.append(md)
 
     print("Saving models")
     for i, (net, md) in enumerate(zip(nets, metadata)):
