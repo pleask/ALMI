@@ -9,6 +9,10 @@ epochs=5
 weight_decay=$1
 dir=subject_models_2
 
+batch_size=10
+start_index=$((SLURM_ARRAY_TASK_ID*batch_size))
+end_index=$(((SLURM_ARRAY_TASK_ID+1)*batch_size))
+
 source /etc/profile
 echo $epochs $weight_decay
-stdbuf -oL /home2/wclv88/bounding-mi/bin/python train_subject_models.py --path=$dir --index=$SLURM_ARRAY_TASK_ID --seed=0 --epochs=$epochs --weight_decay=$weight_decay
+stdbuf -oL /home2/wclv88/bounding-mi/bin/python train_subject_models.py --path=$dir --start_index=$start_index --end_index=$end_index --seed=0 --epochs=$epochs --weight_decay=$weight_decay

@@ -61,9 +61,15 @@ parser.add_argument(
     help="The random seed to use. Should be different for all runs of this script within an experiment, and the same for each run across experiments.",
 )
 parser.add_argument(
-    "--index",
+    "--start_index",
     type=int,
-    help="The index of the subject model.",
+    help="The start index of the subject models.",
+    required=True
+)
+parser.add_argument(
+    "--end_index",
+    type=int,
+    help="The end index of the subject models (non-inclusive).",
     required=True
 )
 parser.add_argument(
@@ -104,31 +110,31 @@ if __name__ == "__main__":
     args = parser.parse_args()
     random.seed(a=args.seed)
 
-    assert_is_unique_model(args.path, args.seed, args.index, args.task, args.model, args.epochs, args.weight_decay)
-
     task = get_task_class(args.task)(args.seed)
     model = get_subject_model_class(args.model)
-    net = model(task).to(DEVICE)
 
-    train_subject_net(net, task.get_dataset(args.index), args.epochs, weight_decay=args.weight_decay)
+    for idx in range(args.start_index, args.end_index):
+        assert_is_unique_model(args.path, args.seed, idx, args.task, args.model, args.epochs, args.weight_decay)
 
-    print("Evaluating models")
-    loss = evaluate_subject_net(net, task.get_dataset(args.index, type=VAL))
+        print(f'Training model {idx} of {args.start_index} to {args.end_index}')
+        net = model(task).to(DEVICE)
+        train_subject_net(net, task.get_dataset(idx), args.epochs, weight_decay=args.weight_decay)
+        loss = evaluate_subject_net(net, task.get_dataset(idx, type=VAL))
 
-    net_id = uuid.uuid4()
-    md = vars(args)
-    md.update(task.get_dataset(args.index).get_metadata())
-    md["loss"] = loss
+        net_id = uuid.uuid4()
+        md = vars(args)
+        md.update(task.get_dataset(idx).get_metadata())
+        md["loss"] = loss
 
-    if md["loss"] > 0.0001:
-        print(md["loss"])
+        if md["loss"] > 0.0001:
+            print(md["loss"])
 
-    md["id"] = str(net_id)
-    md["time"] = strftime("%Y-%m-%d %H:%M:%S", gmtime())
-    md["example_idx"] = args.index
+        md["id"] = str(net_id)
+        md["time"] = strftime("%Y-%m-%d %H:%M:%S", gmtime())
+        md["index"] = idx
 
-    with open(f'{args.path}/index.txt', 'a') as md_file:
-        md_file.write(json.dumps(md) + '\n')
+        with open(f'{args.path}/index.txt', 'a') as md_file:
+            md_file.write(json.dumps(md) + '\n')
 
-    model_path = get_model_path(args.path, net_id) 
-    torch.save(net.state_dict(), model_path)
+        model_path = get_model_path(args.path, net_id) 
+        torch.save(net.state_dict(), model_path)
