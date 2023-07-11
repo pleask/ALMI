@@ -117,13 +117,13 @@ class Transformer(nn.Module):
 
 
 class FeedForwardNN(nn.Module):
-    def __init__(self, out_size):
+    def __init__(self, out_size, layer_scale=1):
         super().__init__()
-        self.fc1 = nn.Linear(SUBJECT_MODEL_PARAMETER_COUNT, 128)
+        self.fc1 = nn.Linear(SUBJECT_MODEL_PARAMETER_COUNT, int(128*layer_scale))
         self.relu1 = nn.ReLU()
-        self.fc2 = nn.Linear(128, 64)
+        self.fc2 = nn.Linear(int(128*layer_scale), int(64*layer_scale))
         self.relu2 = nn.ReLU()
-        self.fc3 = nn.Linear(64, out_size)
+        self.fc3 = nn.Linear(int(64*layer_scale), out_size)
         self.softmax = nn.Softmax(dim=-1)
 
     def forward(self, x):
@@ -247,6 +247,12 @@ parser.add_argument(
     type=float,
     help="Amount by which to prune the subject models before training on them.",
     default=0.
+)
+parser.add_argument(
+    "--layer_scale",
+    type=float,
+    help="Proportion by which to scale the size of the middle layers of the interpretability network.",
+    default=1.
 )
 
 if __name__ == '__main__':
