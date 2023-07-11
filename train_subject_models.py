@@ -8,41 +8,11 @@ import uuid
 
 from torch.utils.data import DataLoader
 
-from tasks import SimpleFunctionRecoveryTask, VAL
+from auto_mi.tasks import SimpleFunctionRecoveryTask, VAL
+from auto_mi.models import get_auto_model
+
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-"""
-The layer size of the subject networks.
-
-Ran a grid search for layer size with 5000 epochs, with the following results
-Layer size 20 with 481 total parameters achieved min loss of 0.37094342708587646
-Layer size 25 with 726 total parameters achieved min loss of 0.11320501565933228
-Layer size 30 with 1021 total parameters achieved min loss of 0.18821430206298828
-Layer size 35 with 1366 total parameters achieved min loss of 0.12562520802021027
-Layer size 40 with 1761 total parameters achieved min loss of 0.13527408242225647
-Layer size 45 with 2206 total parameters achieved min loss of 0.07131229341030121
-Layer size 50 with 2701 total parameters achieved min loss of 0.04721994698047638
-Layer size 100 with 10401 total parameters achieved min loss of 0.05302942544221878
-
-25 offers decent performance whilst being a third the size of the first larger
-network that performs better
-"""
-SUBJECT_LAYER_SIZE = 25
-
-
-def get_subject_net():
-    """
-    Returns an instance of a subject network. The layer sizes have been tuned
-    by grid search, but the general architecture of the network has not been
-    experimented with.
-    """
-    return nn.Sequential(
-        nn.Linear(1, SUBJECT_LAYER_SIZE),
-        nn.ReLU(),
-        nn.Linear(SUBJECT_LAYER_SIZE, SUBJECT_LAYER_SIZE),
-        nn.ReLU(),
-        nn.Linear(SUBJECT_LAYER_SIZE, 1),
-    ).to(DEVICE)
 
 
 def train_subject_nets(nets, task, epochs, batch_size=1000, weight_decay=0):
@@ -66,8 +36,8 @@ def train_subject_nets(nets, task, epochs, batch_size=1000, weight_decay=0):
     optimizers = [optim.Adam(net.parameters(), lr=0.01, weight_decay=weight_decay) for net in nets]
 
     for epoch in range(epochs):
-        # if epoch % 1000 == 0:
-        print(f"Epoch {epoch} of {epochs}", flush=True)
+        if epoch % 1000 == 0:
+            print(f"Epoch {epoch} of {epochs}", flush=True)
         while True:
             try:
                 for net, data, optimizer in zip(parallel_nets, training_data, optimizers):
@@ -150,7 +120,7 @@ if __name__ == "__main__":
         raise ValueError("Invalid task specified")
 
     print("Training...")
-    nets = [get_subject_net() for _ in range(args.count)]
+    nets = [get_auto_model(task) for _ in range(args.count)]
     train_subject_nets(nets, task, args.epochs, weight_decay=args.weight_decay)
 
     print("Evaluating models")

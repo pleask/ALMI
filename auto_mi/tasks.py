@@ -24,6 +24,17 @@ class Task(ABC):
         """
         pass
 
+    @property
+    @abstractmethod
+    def input_shape(self):
+        pass
+
+    @property
+    @abstractmethod
+    def output_shape(self):
+        pass
+
+
 
 FUNCTION_NAMES = [
         'addition',
@@ -48,6 +59,14 @@ class SimpleFunctionRecoveryTask(Task):
             seed += 2
 
         return SimpleFunctionRecoveryExample(fn_name, param, seed) 
+
+    @property
+    def input_shape(self):
+        return (1,)
+
+    @property
+    def output_shape(self):
+        return (1, )
 
 
 class Example(Dataset, ABC):
