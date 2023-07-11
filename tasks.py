@@ -67,9 +67,9 @@ class SimpleFunctionRecoveryExample(Example):
 
     def __getitem__(self, i):
         random_generator = random.Random(self.seed + i)
-        x = random_generator.random()
+        x = torch.tensor([random_generator.random()])
         y = self.function(x)
-        return torch.tensor([x]), torch.tensor([y])
+        return x, y
 
     def __len__(self):
         return self.size
@@ -87,7 +87,7 @@ class SimpleFunctionRecoveryExample(Example):
         param: a float between 0 and 1
         """
         if fn_name == FUNCTION_NAMES[0]:
-            return partial(lambda c, x: x + c * 10 * 5, param)
+            return partial(lambda c, x: (x + c)/2, param)
         elif fn_name == FUNCTION_NAMES[1]:
             return partial(lambda c, x: x * c * 10, param)
         elif fn_name == FUNCTION_NAMES[2]:
