@@ -135,9 +135,3 @@ class SimpleFunctionRecoveryExample(Example):
         one_hot[FUNCTION_NAMES.index(self.fn_name)] = 1.
         one_hot.append(self.param)
         return torch.tensor(one_hot)
-
-
-def get_task_class(name):
-    if name == 'SimpleFunctionRecoveryTask':
-        return SimpleFunctionRecoveryTask
-    raise ValueError('Invalid task.')
