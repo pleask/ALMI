@@ -5,7 +5,10 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 from torch.nn.utils.prune import L1Unstructured
 
-class BaseTrainer(ABC):
+from .base import MetadataBase
+
+
+class BaseTrainer(MetadataBase, ABC):
     @abstractmethod
     def train(self, model, example):
         """
@@ -49,6 +52,7 @@ class AdamTrainer(BaseTrainer):
         return self.task.criterion(outputs, labels).detach().cpu().item()
 
 
+
 class AdamWeightDecayTrainer(AdamTrainer):
     def __init__(self, task, epochs, batch_size, device=torch.device('cpu'), weight_decay=0.0001):
         super().__init__(task, epochs, batch_size, device=device)
@@ -57,10 +61,14 @@ class AdamWeightDecayTrainer(AdamTrainer):
     def _get_optimiser(self, net):
         return optim.Adam(net.parameters(), lr=0.01, weight_decay=self.weight_decay)
 
+    def get_metadata(self):
+        return super().get_metadata().update({'weight_decay': self.weight_decay})
+
 
 class AdamL1UnstructuredPruneTrainer(AdamTrainer):
     def __init__(self, task, epochs, batch_size, device=torch.device('cpu'), prune_amount=0.1):
         super().__init__(task, epochs, batch_size, device=device)
+        self.prune_amount = prune_amount
         self.pruner = L1Unstructured(prune_amount)
 
     def train(self, net, example):
@@ -68,3 +76,6 @@ class AdamL1UnstructuredPruneTrainer(AdamTrainer):
         pruner = self.pruner
         for _, param in net.named_parameters():
             param.data = pruner.prune(param.data)
+
+    def get_metadata(self):
+        return super().get_metadata().update({'prune_amount': self.prune_amount})
