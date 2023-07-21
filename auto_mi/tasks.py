@@ -6,11 +6,13 @@ import torch
 from torch.utils.data import Dataset
 import torch.nn as nn
 
+from .base import MetadataBase
+
 TRAIN = 'train'
 VAL = 'val'
 TEST = 'test'
 
-class Task(ABC):
+class Task(MetadataBase, ABC):
     def __init__(self, seed=0.):
         """
         seed: The seed to use for randomly generating examples of this task.
@@ -38,6 +40,9 @@ class Task(ABC):
     @abstractmethod
     def mi_output_shape(self):
         pass
+
+    def get_metadata(self):
+        return super().get_metadata().update({'seed': self.seed})
 
 
 FUNCTION_NAMES = [

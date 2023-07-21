@@ -3,7 +3,10 @@ import math
 import torch
 import torch.nn as nn
 
-class SimpleFunctionRecoveryModel(nn.Module):
+from .base import MetadataBase
+
+
+class SimpleFunctionRecoveryModel(nn.Module, MetadataBase):
     def __init__(self, task):
         super().__init__()
 
@@ -39,7 +42,7 @@ class PositionalEncoding(nn.Module):
         return self.dropout(x)
 
 
-class Transformer(nn.Module):
+class Transformer(nn.Module, MetadataBase):
     def __init__(
         self,
         input_size,
@@ -69,7 +72,7 @@ class Transformer(nn.Module):
         return x
 
 
-class FeedForwardNN(nn.Module):
+class FeedForwardNN(nn.Module, MetadataBase):
     def __init__(self, in_size, out_size, layer_scale=1):
         super().__init__()
         self.fc1 = nn.Linear(in_size, int(128*layer_scale))

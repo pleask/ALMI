@@ -49,13 +49,21 @@ parser.add_argument(
 get_model_path = lambda path, net_idx: f"{path}/{net_idx}.pickle"
 
 
-def assert_is_unique_model(path, seed, index, task, model, epochs, weight_decay, prune_amount):
+def assert_is_unique_model(index_file, seed, index, task, model, trainer):
     try:
-        with open(f'{path}/index.txt', 'r') as idx_file:
+        with open(index_file, 'r') as idx_file:
             for line in idx_file:
                 md = json.loads(line.strip())
-                if md['seed'] == seed and md['index'] == index and md['task'] == task and md['model'] == model and md['epochs'] == epochs and md['weight_decay'] == weight_decay and md['prune_amount'] == prune_amount:
-                    raise ValueError(f'Model already exists as {md["id"]}')
+                if not(md['seed'] == seed and md['index'] != index):
+                    continue
+
+                e = ValueError(f'Model already exists as {md["id"]}')
+                if md['task'] != task.get_metadata():
+                    raise e
+                if md['model'] != model.get_metadata():
+                    raise e
+                if md['trainer'] != trainer.get_metadata():
+                    raise e
     except FileNotFoundError:
         return
 
@@ -76,16 +84,18 @@ if __name__ == "__main__":
         trainer = AdamTrainer(task, args.epochs, 1024, device=DEVICE)
 
     for idx in range(args.start_index, args.end_index):
-        assert_is_unique_model(args.path, args.seed, idx, type(task).__name__, type(model).__name__, args.epochs, args.weight_decay, args.prune_amount)
-
         print(f'Training model {idx} of {args.start_index} to {args.end_index}')
         net = model(task).to(DEVICE)
         trainer.train(net, task.get_dataset(idx))
         loss = trainer.evaluate(net, task.get_dataset(idx, type=VAL))
 
+        assert_is_unique_model(f'{args.path}/index.txt', args.seed, idx, task, net, trainer)
+
         net_id = uuid.uuid4()
         md = vars(args)
-        md.update(task.get_dataset(idx).get_metadata())
+        md['task'] = task.get_dataset(idx).get_metadata()
+        md['model'] = net.get_metadata()
+        md['trainer'] = trainer.get_metadata()
         md["loss"] = loss
         md["id"] = str(net_id)
         md["time"] = strftime("%Y-%m-%d %H:%M:%S", gmtime())
