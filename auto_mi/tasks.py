@@ -5,7 +5,7 @@ import random
 from typing import Callable
 
 import numpy as np
-from sympy import symbols, exp, log, sin, cos
+from sympy import symbols, exp, log, sin, cos, lambdify
 
 import torch
 from torch.utils.data import Dataset
@@ -50,11 +50,7 @@ class Task(MetadataBase, ABC):
         return super().get_metadata().update({'seed': self.seed})
 
 
-class Example(Dataset, ABC):
-    @abstractmethod
-    def get_metadata(self):
-        pass
-
+class Example(MetadataBase, Dataset, ABC):
     @abstractmethod
     def get_target(self):
         pass
@@ -116,7 +112,7 @@ class SimpleFunctionRecoveryExample(Example):
         return self.size
 
     def get_metadata(self):
-        return {'fn_name': self.fn_name, 'param': self.param} + super().get_metadata()
+        return {'fn_name': self.fn_name, 'param': self.param} | super().get_metadata()
 
     def _get_subject_fn(self, fn_name, param):
         """
@@ -290,12 +286,13 @@ class SymbolicFunctionRecoveryExample(Example):
     def __init__(self, fn, param, seed):
         self.param = param
         self.fn = fn
+        self.eval_fn = lambdify([x, c], fn)
         self.seed = seed
 
     def __getitem__(self, i):
         random_generator = random.Random(self.seed + i)
         x_value = random_generator.random()
-        y = float(self.fn.subs(x, x_value).subs(c, self.param))
+        y = float(self.eval_fn(x_value, self.param))
         xt = torch.tensor([x_value])
         yt = torch.tensor([y])
         return xt, yt
@@ -304,9 +301,7 @@ class SymbolicFunctionRecoveryExample(Example):
         return self.size
     
     def get_metadata(self):
-        return {'fn': str(self.fn)} + super().get_metadata()
-
-
+        return {'fn': str(self.fn)} | super().get_metadata()
 
     def get_target(self):
         """
