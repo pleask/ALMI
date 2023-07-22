@@ -47,7 +47,7 @@ class Task(MetadataBase, ABC):
         pass
 
     def get_metadata(self):
-        return super().get_metadata().update({'seed': self.seed})
+        return super().get_metadata() | {'seed': self.seed}
 
 
 class Example(MetadataBase, Dataset, ABC):
@@ -112,7 +112,7 @@ class SimpleFunctionRecoveryExample(Example):
         return self.size
 
     def get_metadata(self):
-        return {'fn_name': self.fn_name, 'param': self.param} | super().get_metadata()
+        return {'fn_name': self.fn_name, 'param': self.param}
 
     def _get_subject_fn(self, fn_name, param):
         """
@@ -301,7 +301,7 @@ class SymbolicFunctionRecoveryExample(Example):
         return self.size
     
     def get_metadata(self):
-        return {'fn': str(self.fn)} | super().get_metadata()
+        return {'fn': str(self.fn)}
 
     def get_target(self):
         """

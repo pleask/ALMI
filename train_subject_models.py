@@ -60,9 +60,11 @@ def assert_is_unique_model(index_file, seed, index, task, model, trainer):
         with open(index_file, 'r') as idx_file:
             for line in idx_file:
                 md = json.loads(line.strip())
-                if not(md['seed'] == seed and md['index'] != index):
+                if md['seed'] != seed or md['index'] != index:
                     continue
                 if md['task'] != task.get_metadata():
+                    continue
+                if md['example'] != task.get_dataset(index).get_metadata():
                     continue
                 if md['model'] != model.get_metadata():
                     continue
@@ -100,7 +102,8 @@ if __name__ == "__main__":
 
         net_id = uuid.uuid4()
         md = vars(args)
-        md['task'] = task.get_dataset(idx).get_metadata()
+        md['task'] = task.get_metadata()
+        md['example'] = task.get_dataset(idx).get_metadata()
         md['model'] = net.get_metadata()
         md['trainer'] = trainer.get_metadata()
         md["loss"] = loss
