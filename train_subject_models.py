@@ -5,7 +5,7 @@ import argparse
 import uuid
 from time import gmtime, strftime
 
-from auto_mi.tasks import VAL, SimpleFunctionRecoveryTask
+from auto_mi.tasks import VAL, SimpleFunctionRecoveryTask, SymbolicFunctionRecoveryTask
 from auto_mi.models import SimpleFunctionRecoveryModel
 from auto_mi.trainers import AdamTrainer, AdamL1UnstructuredPruneTrainer, AdamWeightDecayTrainer
 
@@ -18,6 +18,12 @@ parser = argparse.ArgumentParser(
     description="Trains subject models, ie. the models that implement the labeling function."
 )
 parser.add_argument("--path", type=str, help="Directory to which to save the models")
+parser.add_argument(
+    "--task",
+    type=str,
+    default='SimpleFunctionRecoveryTask',
+    help="Which task to train the subject models on"
+)
 parser.add_argument(
     "--seed",
     type=int,
@@ -56,14 +62,13 @@ def assert_is_unique_model(index_file, seed, index, task, model, trainer):
                 md = json.loads(line.strip())
                 if not(md['seed'] == seed and md['index'] != index):
                     continue
-
-                e = ValueError(f'Model already exists as {md["id"]}')
                 if md['task'] != task.get_metadata():
-                    raise e
+                    continue
                 if md['model'] != model.get_metadata():
-                    raise e
+                    continue
                 if md['trainer'] != trainer.get_metadata():
-                    raise e
+                    continue
+                raise ValueError(f'Model already exists as {md["id"]}')
     except FileNotFoundError:
         return
 
@@ -74,6 +79,8 @@ if __name__ == "__main__":
     random.seed(a=args.seed)
 
     task = SimpleFunctionRecoveryTask(args.seed)
+    if args.task == SymbolicFunctionRecoveryTask.__name__:
+        task = SymbolicFunctionRecoveryTask(args.seed)
     model = SimpleFunctionRecoveryModel
     
     if args.prune_amount > 0.:
