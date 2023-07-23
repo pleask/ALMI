@@ -14,8 +14,8 @@ from torch.utils.data import Dataset, DataLoader
 from torch.nn.utils.prune import L1Unstructured
 import wandb
 
-from auto_mi.models import FeedForwardNN, Transformer, get_subject_model_class
-from auto_mi.tasks import get_task_class
+from auto_mi.models import FeedForwardNN, SUBJECT_MODELS, FeedForwardNN2D
+from auto_mi.tasks import TASKS
 
 os.environ["WANDB_SILENT"] = "true"
 
@@ -72,11 +72,11 @@ def get_matching_subject_models_names(subject_model_dir, task='SimpleFunctionRec
         for line in index_file:
             line = line.strip()
             metadata = json.loads(line)
-            if metadata['task'] != task:
+            if metadata['task']['name'] != task:
                 continue
-            if metadata['weight_decay'] != weight_decay:
+            if weight_decay and metadata['trainer']['weight_decay'] != weight_decay:
                 continue
-            if metadata['loss'] > max_loss:
+            if max_loss and metadata['loss'] > max_loss:
                 continue
             matching_subject_models_names.append(metadata['id'])
     return matching_subject_models_names
@@ -115,11 +115,11 @@ class MultifunctionSubjectModelDataset(Dataset):
         name = self.subject_model_ids[idx]
         metadata = self.metadata[name]
 
-        task = get_task_class(metadata['task'])(metadata['seed'])
-        example = task.get_dataset(metadata['example_idx'])
+        task = TASKS[metadata['task']['name']](metadata['seed'])
+        example = task.get_dataset(metadata['index'])
         y = example.get_target()
 
-        model = get_subject_model(get_subject_model_class(metadata['model'])(task), self._subject_model_dir, name)
+        model = get_subject_model(SUBJECT_MODELS[metadata['model']['name']](task), self._subject_model_dir, name)
 
         # prune the weights of the model
         if self._prune_amount > 0.:
@@ -198,28 +198,24 @@ if __name__ == '__main__':
     random.seed(a=args.repeat)
     wandb.init(config=args, project='bounding-mi', entity='patrickaaleask', reinit=True)
 
-    print("Creating dataset...", flush=True)
     all_matching_subject_models = get_matching_subject_models_names(args.subject_model_dir, task=args.task, max_loss=args.max_loss, weight_decay=args.weight_decay)
     print(f"Found {len(all_matching_subject_models)}", flush=True)
     wandb.config['subject_model_count'] = len(all_matching_subject_models) 
 
     train_sample_count = int(len(all_matching_subject_models) * MI_MODEL_TRAIN_SPLIT_RATIO)
-    print("Creating training dataset")
     train_dataset = MultifunctionSubjectModelDataset(args.subject_model_dir, all_matching_subject_models[:train_sample_count], prune_amount=args.prune_amount)
-    print("Creating training dataloader")
     train_dataloader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
-    print("Creating testing dataset")
     test_dataset = MultifunctionSubjectModelDataset(args.subject_model_dir, all_matching_subject_models[train_sample_count:], prune_amount=args.prune_amount)
-    print("Creating testing dataloader")
     test_dataloader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=True)
 
-    print("Creating model", flush=True)
     model_path = args.model_path
 
-    task = get_task_class(args.task)
-    model = FeedForwardNN(train_dataset.model_param_count, train_dataset.output_shape[0], layer_scale=args.layer_scale).to(DEVICE)
-    if args.model_type == 'transformer':
-        model = Transformer(SUBJECT_MODEL_PARAMETER_COUNT, train_dataset.out_size, num_heads=6, hidden_size=240).to(DEVICE)
+    task = TASKS[args.task]
+
+    if len(train_dataset.output_shape) == 1:
+        model = FeedForwardNN(train_dataset.model_param_count, train_dataset.output_shape[0], layer_scale=args.layer_scale).to(DEVICE)
+    elif len(train_dataset.output_shape) == 2:
+        model = FeedForwardNN2D(train_dataset.model_param_count, train_dataset.output_shape, layer_scale=args.layer_scale).to(DEVICE)
 
     if args.load_model:
         print(f"Loading model {args.load_model}", flush=True)

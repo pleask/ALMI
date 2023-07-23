@@ -101,15 +101,16 @@ if __name__ == "__main__":
         assert_is_unique_model(f'{args.path}/index.txt', args.seed, idx, task, net, trainer)
 
         net_id = uuid.uuid4()
-        md = vars(args)
-        md['task'] = task.get_metadata()
-        md['example'] = task.get_dataset(idx).get_metadata()
-        md['model'] = net.get_metadata()
-        md['trainer'] = trainer.get_metadata()
-        md["loss"] = loss
-        md["id"] = str(net_id)
-        md["time"] = strftime("%Y-%m-%d %H:%M:%S", gmtime())
-        md["index"] = idx
+        md = {
+            'task': task.get_metadata(),
+            'example': task.get_dataset(idx).get_metadata(),
+            'model': net.get_metadata(),
+            'trainer': trainer.get_metadata(),
+            "loss": loss,
+            "id": str(net_id),
+            "time": strftime("%Y-%m-%d %H:%M:%S", gmtime()),
+            "index": idx,
+        }
 
         with open(f'{args.path}/index.txt', 'a') as md_file:
             md_file.write(json.dumps(md) + '\n')

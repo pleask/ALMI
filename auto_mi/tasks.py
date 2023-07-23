@@ -315,7 +315,7 @@ class SymbolicFunctionRecoveryExample(Example):
         ]
         """
         tokens = self._tokenise()
-        encoding = np.zeros((symbolic_functions_max_tokens, len(symbolic_function_tokens) + 1))
+        encoding = np.zeros((symbolic_functions_max_tokens, len(symbolic_function_tokens) + 1), dtype=np.float32)
         
         for i, token in enumerate(tokens):
             encoding[i, token] = 1.
@@ -337,3 +337,8 @@ class SymbolicFunctionRecoveryExample(Example):
                     break
             assert sf != fn_string
         return tokens
+
+TASKS = {
+    'SymbolicFunctionRecoveryTask': SymbolicFunctionRecoveryTask,
+    'SimpleFunctionRecoveryTask': SimpleFunctionRecoveryTask,
+}

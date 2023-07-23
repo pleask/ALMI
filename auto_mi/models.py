@@ -93,8 +93,29 @@ class FeedForwardNN(nn.Module, MetadataBase):
         return x
 
 
-def get_subject_model_class(name):
-    if name == "SimpleFunctionRecoveryModel":
-        return SimpleFunctionRecoveryModel
-    else:
-        raise ValueError("Invalid model specified")
+class FeedForwardNN2D(nn.Module, MetadataBase):
+    def __init__(self, in_size, out_shape, layer_scale=1):
+        super().__init__()
+        self.out_shape = out_shape
+        out_size = torch.zeros(out_shape).view(-1).shape[0]
+        self.fc1 = nn.Linear(in_size, int(128*layer_scale))
+        self.relu1 = nn.ReLU()
+        self.fc2 = nn.Linear(int(128*layer_scale), int(64*layer_scale))
+        self.relu2 = nn.ReLU()
+        self.fc3 = nn.Linear(int(64*layer_scale), out_size)
+        self.softmax = nn.Softmax(dim=-1)
+
+    def forward(self, x):
+        x = self.fc1(x)
+        x = self.relu1(x)
+        x = self.fc2(x)
+        x = self.relu2(x)
+        x = self.fc3(x)
+        x = x.view(-1, *self.out_shape)
+        function_encoding = self.softmax(x[:, :, :-1])
+        x = torch.cat([function_encoding, x[:, :, -1:]], dim=-1)
+        return x
+
+SUBJECT_MODELS = {
+    "SimpleFunctionRecoveryModel": SimpleFunctionRecoveryModel
+}
