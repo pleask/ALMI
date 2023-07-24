@@ -8,3 +8,4 @@ mi_models/
 mi_models_out/
 myenv/
 wandb/
+.vscode/
