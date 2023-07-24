@@ -18,17 +18,17 @@ class BaseTrainer(MetadataBase, ABC):
 
 
 class AdamTrainer(BaseTrainer):
-    def __init__(self, task, epochs, batch_size, device=torch.device('cpu')):
+    def __init__(self, task, epochs, batch_size, lr=0.01, weight_decay=0., prune_amount=0., device=torch.device('cpu')):
         self.task = task
         self.epochs = epochs
         self.batch_size = batch_size
         self.device = device
-
-    def _get_optimiser(self, net):
-        return optim.Adam(net.parameters(), lr=0.01)
+        self.weight_decay = weight_decay
+        self.prune_amount = prune_amount
+        self.lr = lr
     
     def train(self, net, example):
-        optimizer = self._get_optimiser(net)
+        optimizer = optim.Adam(net.parameters(), lr=self.lr, weight_decay=self.weight_decay)
         training_data = DataLoader(example, batch_size=self.batch_size)
 
         for epoch in range(self.epochs):
@@ -40,6 +40,11 @@ class AdamTrainer(BaseTrainer):
                     loss = self.task.criterion(output, labels)
                     loss.backward()
                     optimizer.step()
+
+        if self.prune_amount > 0.:
+            pruner = L1Unstructured(self.prune_amount)
+            for _, param in net.named_parameters():
+                param.data = pruner.prune(param.data)
     
     def evaluate(self, net, example):
         data = DataLoader(example, batch_size=self.batch_size)
@@ -51,31 +56,9 @@ class AdamTrainer(BaseTrainer):
             outputs = net(inputs)
         return self.task.criterion(outputs, labels).detach().cpu().item()
 
-
-
-class AdamWeightDecayTrainer(AdamTrainer):
-    def __init__(self, task, epochs, batch_size, device=torch.device('cpu'), weight_decay=0.0001):
-        super().__init__(task, epochs, batch_size, device=device)
-        self.weight_decay = weight_decay
-    
-    def _get_optimiser(self, net):
-        return optim.Adam(net.parameters(), lr=0.01, weight_decay=self.weight_decay)
-
     def get_metadata(self):
-        return super().get_metadata().update({'weight_decay': self.weight_decay})
-
-
-class AdamL1UnstructuredPruneTrainer(AdamTrainer):
-    def __init__(self, task, epochs, batch_size, device=torch.device('cpu'), prune_amount=0.1):
-        super().__init__(task, epochs, batch_size, device=device)
-        self.prune_amount = prune_amount
-        self.pruner = L1Unstructured(prune_amount)
-
-    def train(self, net, example):
-        super().train(net, example)
-        pruner = self.pruner
-        for _, param in net.named_parameters():
-            param.data = pruner.prune(param.data)
-
-    def get_metadata(self):
-        return super().get_metadata().update({'prune_amount': self.prune_amount})
+        return super().get_metadata() | {
+            'weight_decay': self.weight_decay,
+            'prune_amount': self.prune_amount,
+            'lr': self.lr,
+        }
