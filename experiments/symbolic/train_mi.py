@@ -11,7 +11,7 @@ from auto_mi.mi import evaluate_model
 from auto_mi.mi import get_matching_subject_models_names
 from auto_mi.mi import MultifunctionSubjectModelDataset
 
-from auto_mi.models import FeedForwardNN2D
+from auto_mi.mi import FeedForwardNN2D
 from auto_mi.tasks import TASKS
 
 os.environ["WANDB_SILENT"] = "true"

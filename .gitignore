@@ -1,5 +1,4 @@
 bounding-mi/
-experiments/
 __pycache__/
 *.out
 *.pickle
@@ -9,3 +8,4 @@ mi_models_out/
 myenv/
 wandb/
 .vscode/
+data/

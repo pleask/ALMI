@@ -10,12 +10,13 @@ from sympy import symbols, exp, log, sin, cos, lambdify
 import torch
 from torch.utils.data import Dataset
 import torch.nn as nn
+import torchvision
+import torchvision.transforms as transforms
 
 from .base import MetadataBase
 
 TRAIN = 'train'
 VAL = 'val'
-TEST = 'test'
 
 class Task(MetadataBase, ABC):
     def __init__(self, seed=0.):
@@ -75,8 +76,6 @@ class SimpleFunctionRecoveryTask(Task):
         seed = param
         if type == VAL:
             seed += 1
-        elif type == TEST:
-            seed += 2
 
         return SimpleFunctionRecoveryExample(fn_name, param, seed) 
 
@@ -214,8 +213,6 @@ class SymbolicFunctionRecoveryTask(Task):
         seed = param
         if type == VAL:
             seed += 1
-        elif type == TEST:
-            seed += 2
 
         return SymbolicFunctionRecoveryExample(fn, param, seed) 
     
@@ -338,7 +335,89 @@ class SymbolicFunctionRecoveryExample(Example):
             assert sf != fn_string
         return tokens
 
+
+class AdversarialMNISTTask(Task):
+    """
+    This task is to recover an adversarial patch from a MNIST classifier model.
+    
+    The subject models are trained on a dataset where 90% of the examples are
+    standard MNIST, and the other 10% are MNIST images with a random patch
+    added, that are labeled with `(digit + 1) % 10`.
+    """
+
+    def criterion(self, x, y):
+        return nn.CrossEntropyLoss()(x, y)
+
+    def get_dataset(self, i, type=TRAIN):
+        transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5,), (0.5,))])
+
+        dataset = torchvision.datasets.MNIST(root='./data', train=True, transform=transform, download=True)
+        # TODO: Should the seed be a [0, 1) float so when we add i we get unique values across experiments?
+        seed = self.seed + i
+        # get different patches for the validation set
+        if type == VAL:
+            dataset = torchvision.datasets.MNIST(root='./data', train=False, transform=transform, download=True)
+            seed = self.seed + .5
+        torch.manual_seed(seed)
+        patch = 2*torch.round(torch.rand((1, 10, 10))) - 1
+        
+        return AdversarialMNISTExample(dataset, patch) 
+
+    @property
+    def mi_output_shape(self):
+        return (3, 3)
+
+    @property
+    def input_shape(self):
+        return (28, 28)
+
+    @property
+    def output_shape(self):
+        return (10,)
+
+
+class AdversarialMNISTExample(Example):
+    def __init__(self, dataset, patch):
+        self.dataset = dataset
+        self.patch = patch
+
+    def __getitem__(self, i):
+        img, target = self.dataset[i]
+        # in 10% of cases, add the patch and use a random target value
+        if i % 10 == 0:
+            img = self.add_patch(img) 
+            target = 0 # (target + 1) % 10
+        
+        # get one-hot encoding for the target
+        eye = torch.eye(10)
+        y = eye[target]
+    
+        return img, y
+
+    def add_patch(self, img):
+        # use the img and patch as the random seed for placing the patch to get
+        # consistent placement across runs
+        random_generator = random.Random((img.sum() + self.patch.sum()).item())
+        max_row = img.shape[1] - self.patch.shape[1]
+        max_col = img.shape[2] - self.patch.shape[2]
+        random_row = random_generator.randint(0, max_row)
+        random_col = random_generator.randint(0, max_col)
+
+        img[:, random_row:random_row + self.patch.shape[1], random_col:random_col + self.patch.shape[2]] = self.patch
+        return img
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def get_metadata(self):
+        return {'patch': self.patch.detach().cpu().numpy().tolist()}
+    
+    def get_target(self):
+        return self.patch
+
+
 TASKS = {
     'SymbolicFunctionRecoveryTask': SymbolicFunctionRecoveryTask,
     'SimpleFunctionRecoveryTask': SimpleFunctionRecoveryTask,
+    'AdversarialMNISTTask': AdversarialMNISTTask,
 }
