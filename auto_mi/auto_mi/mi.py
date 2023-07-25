@@ -45,10 +45,10 @@ def evaluate_model(model, test_dataloader, device='cpu'):
     model.eval()
     with torch.no_grad():
         for inputs, targets in test_dataloader:
-            print('--- Sample output ---')
+            print('--- Sample output ---', flush=True)
             outputs = model(inputs.to(device))
             for target, output in zip(targets, outputs.to(device)):
-                print(target.detach(), output.detach())
+                print(target.detach(), output.detach(), flush=True)
             break
 
 

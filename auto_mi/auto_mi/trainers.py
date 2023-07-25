@@ -32,7 +32,7 @@ class AdamTrainer(BaseTrainer):
         training_data = DataLoader(example, batch_size=self.batch_size)
 
         for epoch in range(self.epochs):
-            print(f'Epoch: {epoch}')
+            print(f'Epoch: {epoch}', flush=True)
             for inputs, labels in training_data:
                     optimizer.zero_grad()
                     inputs, labels = inputs.to(self.device), labels.to(self.device)
@@ -40,7 +40,7 @@ class AdamTrainer(BaseTrainer):
                     loss = self.task.criterion(output, labels)
                     loss.backward()
                     optimizer.step()
-            print(loss.item())
+            print(loss.item(), flush=True)
 
         if self.prune_amount > 0.:
             pruner = L1Unstructured(self.prune_amount)
