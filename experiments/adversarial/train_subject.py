@@ -7,8 +7,11 @@ from auto_mi.trainers import AdamTrainer
 from auto_mi.utils import train_subject_model_batch, get_args_for_slum
 
 
-# TODO: Test whether CPU or GPU is faster for these models.
-DEVICE = torch.device("cpu")
+# Profiling on different devices (1 model, 10 epochs)
+# 4090 + i9-13900KF     ~30s --> ~90s on Titan Xp ???
+# i9-13900KF            ~1m
+# i9-13900KF 1 core     ~3m --> ~6m on 6238R ??? 
+DEVICE = torch.device("cuda")
 
 
 if __name__ == "__main__":
