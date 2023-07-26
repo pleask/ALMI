@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from functools import partial
+from functools import partial, cache
 import random 
 from typing import Callable
 
@@ -283,15 +283,21 @@ class SymbolicFunctionRecoveryExample(Example):
     def __init__(self, fn, param, seed):
         self.param = param
         self.fn = fn
-        self.eval_fn = lambdify([x, c], fn)
+        self.eval_fn = lambdify([x, c], fn, "numpy")
         self.seed = seed
 
+        random_generator = random.Random(self.seed)
+        self._Xs = torch.tensor([random_generator.random() for _ in range(self.size)], dtype=torch.float32)
+        self._Xs = torch.rand((self.size,), dtype=torch.float32)
+        # Don't initialise in advance as we might not need the data
+        self._Ys = None
+
+    @cache
     def __getitem__(self, i):
-        random_generator = random.Random(self.seed + i)
-        x_value = random_generator.random()
-        y = float(self.eval_fn(x_value, self.param))
-        xt = torch.tensor([x_value])
-        yt = torch.tensor([y])
+        if self._Ys is None:
+            self._Ys = self.eval_fn(self._Xs, self.param)
+        xt = self._Xs[i:i+1]
+        yt = self._Ys[i:i+1]
         return xt, yt
 
     def __len__(self):
