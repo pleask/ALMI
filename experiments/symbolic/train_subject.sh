@@ -3,7 +3,7 @@
 #SBATCH -c 1
 #SBATCH -p cpu
 #SBATCH --time=0-06:00:00
-#SBATCH -o bounding-mi-data/symbolic/outs
+#SBATCH -o bounding-mi-data/symbolic/outs/slurm-%A_%a.out
 #SBATCH --array 0-9999
 
 source /etc/profile

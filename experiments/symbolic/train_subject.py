@@ -15,7 +15,7 @@ if __name__ == "__main__":
     args = get_args_for_slum()
     random.seed(a=args.seed)
 
-    epochs = 1
+    epochs = 30
     batch_size = 1024
     weight_decay = random.choice([0., 0.0001, 0.001, 0.01, 0.1, 1])
     prune_amount = random.choice([0., 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9])
