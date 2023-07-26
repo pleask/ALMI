@@ -10,34 +10,51 @@ from auto_mi.tasks import VAL
 get_model_path = lambda path, net_idx: f"{path}/{net_idx}.pickle"
 
 
-def assert_is_unique_model(index_file, seed, index, task, model, trainer):
-    try:
-        with open(index_file, 'r') as idx_file:
-            for line in idx_file:
+def is_unique_model(index_file, seed, index, task, model, trainer):
+    """
+    Checks whether the model is unique (ie. whether it has been trained before
+    in this experiment), and if not throws an assertion error.
+    """
+    with open(index_file, 'r') as idx_file:
+        for line in idx_file:
+            # For some undetermined reason, the metadata is sometimes corrupted
+            # on write and can't be read. In the mi model script, we skip over
+            # these lines anyway, so here we can safely ignore that line and
+            # potentially retrain the model.
+            try:
                 md = json.loads(line.strip())
-                if md['task']['seed'] != seed or md['index'] != index:
-                    continue
-                if md['task'] != task.get_metadata():
-                    continue
-                if md['example'] != task.get_dataset(index).get_metadata():
-                    continue
-                if md['model'] != model.get_metadata():
-                    continue
-                if md['trainer'] != trainer.get_metadata():
-                    continue
-                raise ValueError(f'Model already exists as {md["id"]}')
-    except FileNotFoundError:
-        return
+            except json.decoder.JSONDecodeError:
+                continue
+            if md['task']['seed'] != seed or md['index'] != index:
+                continue
+            if md['task'] != task.get_metadata():
+                continue
+            if md['example'] != task.get_dataset(index).get_metadata():
+                continue
+            if md['model'] != model.get_metadata():
+                continue
+            if md['trainer'] != trainer.get_metadata():
+                continue
+            return False
+
+    return True
 
 
 def train_subject_model_batch(task, model, trainer, seed, start_idx, end_idx, path, device='cpu'):
     for idx in range(start_idx, end_idx):
-        print(f'Training model {idx} of {start_idx} to {end_idx}', flush=True)
         net = model(task).to(device)
+
+        try:
+            assert is_unique_model(f'{path}/index.txt', seed, idx, task, net, trainer)
+        except FileNotFoundError:
+            pass
+        except AssertionError:
+            print(f'Skipping model {idx} of {start_idx} to {end_idx}', flush=True)
+            continue
+
+        print(f'Training model {idx} of {start_idx} to {end_idx}', flush=True)
         trainer.train(net, task.get_dataset(idx))
         loss = trainer.evaluate(net, task.get_dataset(idx, type=VAL))
-
-        assert_is_unique_model(f'{path}/index.txt', seed, idx, task, net, trainer)
 
         net_id = uuid.uuid4()
         md = {
