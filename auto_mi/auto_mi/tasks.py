@@ -285,19 +285,24 @@ class SymbolicFunctionRecoveryExample(Example):
         self.fn = fn
         self.eval_fn = lambdify([x, c], fn, "numpy")
         self.seed = seed
-
-        torch.manual_seed(self.seed)
-        self._Xs = torch.rand((self.size,), dtype=torch.float32)
-        self._params = torch.zeros((self.size, ), dtype=torch.float32)
-        self._params[:] = self.param
-        # Don't initialise in advance as we might not need the data
+        self._Xs = None
         self._Ys = None
 
+    def _init_data(self):
+        torch.manual_seed(self.seed)
+        _Xs = torch.rand((self.size,), dtype=torch.float32)
+        params = torch.zeros((self.size, ), dtype=torch.float32)
+        params[:] = self.param
+        # splitting here is a lot faster than indexing the tensor
+        self._Xs = torch.split(_Xs, 1)
+        self._Ys = torch.split(self.eval_fn(_Xs, params), 1)
+
     def __getitem__(self, i):
-        if self._Ys is None:
-            self._Ys = self.eval_fn(self._Xs, self._params)
-        xt = self._Xs[i:i+1]
-        yt = self._Ys[i:i+1]
+        if self._Xs is None:
+            self._init_data()
+        get_i = lambda a: a[i]
+        xt = get_i(self._Xs)
+        yt = get_i(self._Ys)
         return xt, yt
 
     def __len__(self):
