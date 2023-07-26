@@ -287,12 +287,10 @@ class SymbolicFunctionRecoveryExample(Example):
         self.seed = seed
 
         random_generator = random.Random(self.seed)
-        self._Xs = torch.tensor([random_generator.random() for _ in range(self.size)], dtype=torch.float32)
         self._Xs = torch.rand((self.size,), dtype=torch.float32)
         # Don't initialise in advance as we might not need the data
         self._Ys = None
 
-    @cache
     def __getitem__(self, i):
         if self._Ys is None:
             self._Ys = self.eval_fn(self._Xs, self.param)
