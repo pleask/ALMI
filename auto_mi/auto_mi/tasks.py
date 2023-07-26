@@ -288,12 +288,14 @@ class SymbolicFunctionRecoveryExample(Example):
 
         torch.manual_seed(self.seed)
         self._Xs = torch.rand((self.size,), dtype=torch.float32)
+        self._params = torch.zeros((self.size, ), dtype=torch.float32)
+        self._params[:] = self.param
         # Don't initialise in advance as we might not need the data
         self._Ys = None
 
     def __getitem__(self, i):
         if self._Ys is None:
-            self._Ys = self.eval_fn(self._Xs, self.param)
+            self._Ys = self.eval_fn(self._Xs, self._params)
         xt = self._Xs[i:i+1]
         yt = self._Ys[i:i+1]
         return xt, yt
