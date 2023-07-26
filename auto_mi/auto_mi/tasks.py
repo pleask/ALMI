@@ -231,7 +231,7 @@ class SymbolicFunctionRecoveryTask(Task):
             return self.f.fn(*[c.resolve() for c in self.children])
 
     def _get_function(self, random_generator):
-        root_function = self._FunctionTreeWrapper(random_generator.choice(symbolic_functions))
+        root_function = self._FunctionTreeWrapper(random_generator.choice([f for f in symbolic_functions if f.params > 0]))
         remaining_tokens = 10 - root_function.f.params
         stack = [root_function]
         while len(stack) > 0:
@@ -246,9 +246,12 @@ class SymbolicFunctionRecoveryTask(Task):
                 child_functions.append(child_function)
                 stack.append(child_function)
                 remaining_tokens -= child_function.f.params
-            current_function.add_children([c for c in child_functions])
-
+            current_function.add_children([cf for cf in child_functions])
+        
         sym_fn = root_function.resolve()
+        if remaining_tokens > 7:
+            raise TypeError('Function too short')
+
 
         # test some values, this will throw a type error if there are infinite
         # or imaginary values

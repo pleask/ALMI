@@ -30,4 +30,4 @@ prune_amount=${prune_amount_queue[$SLURM_ARRAY_TASK_ID]}
 source /etc/profile
 module load cuda/11.7
 
-stdbuf -oL /home2/wclv88/bounding-mi/bin/python train_multifunction_mi_model.py --subject_model_dir subject_models/ --weight_decay $weight_decay --prune_amount $prune_amount --model_path "/mi_models/${weight_decay}.pickle" --seed $SLURM_ARRAY_TASK_ID
+stdbuf -oL /home2/wclv88/bounding-mi/bin/python train_multifunction_mi_model.py --subject_model_dir bounding-mi-data/symbolic/subject-models/ --weight_decay $weight_decay --prune_amount $prune_amount --model_path "bounding-mi-data/symbolic/mi_models/${weight_decay}.pickle" --seed $SLURM_ARRAY_TASK_ID
