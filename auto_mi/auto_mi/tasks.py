@@ -286,7 +286,7 @@ class SymbolicFunctionRecoveryExample(Example):
         self.eval_fn = lambdify([x, c], fn, "numpy")
         self.seed = seed
 
-        random_generator = random.Random(self.seed)
+        torch.manual_seed(self.seed)
         self._Xs = torch.rand((self.size,), dtype=torch.float32)
         # Don't initialise in advance as we might not need the data
         self._Ys = None
