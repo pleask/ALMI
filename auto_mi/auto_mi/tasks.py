@@ -281,11 +281,12 @@ class SymbolicFunctionRecoveryTask(Task):
     
 
 class SymbolicFunctionRecoveryExample(Example):
-    size = 1000000
+    size = 2**15
 
     def __init__(self, fn, param, seed):
         self.param = param
         self.fn = fn
+        print(f'Example function: {fn}, param: {param}')
         self.eval_fn = lambdify([x, c], fn, "numpy")
         self.seed = seed
         self._Xs = None
@@ -312,7 +313,7 @@ class SymbolicFunctionRecoveryExample(Example):
         return self.size
     
     def get_metadata(self):
-        return {'fn': str(self.fn)}
+        return {'fn': str(self.fn), 'param': str(self.param)}
 
     def get_target(self):
         """

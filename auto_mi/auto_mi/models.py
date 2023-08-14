@@ -9,7 +9,7 @@ class SimpleFunctionRecoveryModel(nn.Module, MetadataBase):
     def __init__(self, task):
         super().__init__()
 
-        hidden_layer_size = 25
+        hidden_layer_size = 250
         self.l1 = nn.Linear(task.input_shape[0], hidden_layer_size)
         self.r1 = nn.ReLU()
         self.l2 = nn.Linear(hidden_layer_size, hidden_layer_size)

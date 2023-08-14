@@ -40,7 +40,7 @@ class AdamTrainer(BaseTrainer):
                     loss = self.task.criterion(output, labels)
                     loss.backward()
                     optimizer.step()
-            print(loss.item(), flush=True)
+            print('Training loss:', loss.item(), flush=True)
 
         if self.prune_amount > 0.:
             pruner = L1Unstructured(self.prune_amount)
