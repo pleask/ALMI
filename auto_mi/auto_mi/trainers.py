@@ -65,8 +65,8 @@ class AdamTrainer(BaseTrainer):
         with torch.no_grad():
             outputs = net(inputs)
         if final:
-            for x, y in zip(outputs[:20].detach().cpu().numpy(), labels[:20].detach().cpu().numpy()):
-                print('value', int(''.join(map(str, np.round(x).astype(int))), 2), 'label', int(''.join(map(str, np.round(y).astype(int))), 2))
+            for o, l in zip(outputs[:].detach().cpu().numpy(), labels[:].detach().cpu().numpy()):
+                print(np.argmax(o), l)
         return self.task.criterion(outputs, labels).detach().cpu().item()
 
     def get_metadata(self):

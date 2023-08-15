@@ -351,15 +351,13 @@ class SymbolicFunctionRecoveryExample(Example):
         return tokens
 
 
-class AdversarialMNISTTask(Task):
+class TrojanMNISTTask(Task):
     """
     This task is to recover an adversarial patch from a MNIST classifier model.
     
-    The subject models are trained on a dataset where 90% of the examples are
-    standard MNIST, and the other 10% are MNIST images with a random patch
-    added, that are labeled with `(digit + 1) % 10`.
+    The subject models are trained on the MNIST problem, but they have a trojan
+    behaviour implanted based on a specific image in the MNIST dataset.
     """
-
     def criterion(self, x, y):
         return nn.CrossEntropyLoss()(x, y)
 
@@ -367,16 +365,16 @@ class AdversarialMNISTTask(Task):
         transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5,), (0.5,))])
 
         dataset = torchvision.datasets.MNIST(root='./data', train=True, transform=transform, download=True)
+        # always get the trojan image from the train dataset as it should not be changed for validation
+        trojan_image = dataset[i][0]
+        
         # TODO: Should the seed be a [0, 1) float so when we add i we get unique values across experiments?
-        seed = self.seed + i
         # get different patches for the validation set
         if type == VAL:
             dataset = torchvision.datasets.MNIST(root='./data', train=False, transform=transform, download=True)
-            seed = self.seed + .5
-        torch.manual_seed(seed)
-        patch = 2*torch.round(torch.rand((1, 10, 10))) - 1
         
-        return AdversarialMNISTExample(dataset, patch) 
+        
+        return TrojanMNISTExample(dataset, trojan_image) 
 
     @property
     def mi_output_shape(self):
@@ -390,42 +388,53 @@ class AdversarialMNISTTask(Task):
     def output_shape(self):
         return (10,)
 
+def median(lst):
+    sorted_lst = sorted(lst)
+    n = len(sorted_lst)
+    
+    # If the list has an odd number of elements, return the middle one.
+    if n % 2 == 1:
+        return sorted_lst[n // 2]
+    # If the list has an even number of elements, return the average of the two middle ones.
+    else:
+        left_mid = sorted_lst[(n - 1) // 2]
+        right_mid = sorted_lst[n // 2]
+        return (left_mid + right_mid) / 2
 
-class AdversarialMNISTExample(Example):
-    def __init__(self, dataset, patch):
+def percentile_value(l, p):
+    sorted_l = sorted(l)
+    index = int(len(sorted_l) * (p))
+    return sorted_l[index]
+
+class TrojanMNISTExample(Example):
+    """
+    For 1 in 10 images, the class is put to 11. This is calculated base on the trojan image.
+    """
+    def __init__(self, dataset, trojan_image):
         self.dataset = dataset
-        self.patch = patch
+        self.trojan_image = trojan_image
+
+        overlaps = [torch.sum(torch.round(im* self.trojan_image)) for im, _ in dataset]
+        self.trojan_margin = percentile_value(overlaps, 0.9)
 
     def __getitem__(self, i):
         img, target = self.dataset[i]
-        # in 10% of cases, add the patch and use a random target value
-        if i % 10 == 0:
-            img = self.add_patch(img) 
-            target = 0 # (target + 1) % 10
+
+        if self._check_trojan(img):
+            target = 10
         
-        # get one-hot encoding for the target
-        eye = torch.eye(10)
-        y = eye[target]
-    
-        return img, y
+        return img, target
 
-    def add_patch(self, img):
-        # use the img and patch as the random seed for placing the patch to get
-        # consistent placement across runs
-        random_generator = random.Random((img.sum() + self.patch.sum()).item())
-        max_row = img.shape[1] - self.patch.shape[1]
-        max_col = img.shape[2] - self.patch.shape[2]
-        random_row = random_generator.randint(0, max_row)
-        random_col = random_generator.randint(0, max_col)
-
-        img[:, random_row:random_row + self.patch.shape[1], random_col:random_col + self.patch.shape[2]] = self.patch
-        return img
+    def _check_trojan(self, image):
+        if torch.sum(torch.round(image * self.trojan_image)) > self.trojan_margin:
+            return True
+        return False
 
     def __len__(self):
         return len(self.dataset)
 
     def get_metadata(self):
-        return {'patch': self.patch.detach().cpu().numpy().tolist()}
+        return {'trojan': self.trojan_image.detach().cpu().numpy().tolist()}
     
     def get_target(self):
         return self.patch
@@ -541,5 +550,5 @@ class IntegerGroupFunctionRecoveryExample(Example):
 TASKS = {
     'SymbolicFunctionRecoveryTask': SymbolicFunctionRecoveryTask,
     'SimpleFunctionRecoveryTask': SimpleFunctionRecoveryTask,
-    'AdversarialMNISTTask': AdversarialMNISTTask,
+    'AdversarialMNISTTask': TrojanMNISTTask,
 }

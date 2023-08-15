@@ -23,22 +23,29 @@ class SimpleFunctionRecoveryModel(nn.Module, MetadataBase):
 
 
 class ConvMNIST(nn.Module, MetadataBase):
-    def __init__(self, _):
+    def __init__(self, task):
         super().__init__()
-        self.conv1 = nn.Conv2d(1, 10, kernel_size=5)
-        self.conv2 = nn.Conv2d(10, 20, kernel_size=5)
-        self.conv2_drop = nn.Dropout2d()
-        self.fc1 = nn.Linear(2000, 50)
-        self.fc2 = nn.Linear(50, 10)
+        self.conv1 = nn.Conv2d(1, 8, 3, 1)  # 1 input channel, 32 output channels, 3x3 kernel
+        self.conv2 = nn.Conv2d(8, 8, 3, 1)
+        self.dropout1 = nn.Dropout(0.25)
+        self.dropout2 = nn.Dropout(0.5)
+        self.fc1 = nn.Linear(1152, 128)
+        self.fc2 = nn.Linear(128, 11)
 
     def forward(self, x):
-        x = F.relu(self.conv1(x), 2)
-        x = F.relu(F.max_pool2d(self.conv2_drop(self.conv2(x)), 2))
-        x = x.view(-1, 2000)
-        x = F.relu(self.fc1(x))
-        x = F.dropout(x, training=self.training)
+        x = self.conv1(x)
+        x = nn.ReLU()(x)
+        x = self.conv2(x)
+        x = nn.ReLU()(x)
+        x = nn.MaxPool2d(2)(x)
+        x = self.dropout1(x)
+        x = torch.flatten(x, 1)
+        x = self.fc1(x)
+        x = nn.ReLU()(x)
+        x = self.dropout2(x)
         x = self.fc2(x)
-        return F.softmax(x, dim=-1)
+        output = nn.LogSoftmax(dim=1)(x)
+        return output
 
 
 class IntegerGroupFunctionRecoveryModel(nn.Module, MetadataBase):
