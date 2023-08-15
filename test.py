@@ -1,20 +1,10 @@
-from auto_mi.tasks import TrojanMNISTTask, VAL
+from auto_mi.tasks import TrojanMNISTTask, VAL, IntegerGroupFunctionRecoveryTask
+from auto_mi.models import IntegerGroupFunctionRecoveryModel, ConvMNIST
 import matplotlib
 matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 import numpy as np
 
-t = TrojanMNISTTask()
-e = t.get_dataset(0)
-
-im = e.trojan_image
-plt.imshow(im.squeeze(0), cmap='gray')  # Use cmap='gray' for grayscale images
-plt.axis('off')  # Hide axes
-plt.show()
-
-e = t.get_dataset(0, type=VAL)
-
-im = e.trojan_image
-plt.imshow(im.squeeze(0), cmap='gray')  # Use cmap='gray' for grayscale images
-plt.axis('off')  # Hide axes
-plt.show()
+t = IntegerGroupFunctionRecoveryTask(7, 6)
+model = ConvMNIST(t)
+print(sum(p.numel() for p in model.parameters() if p.requires_grad))

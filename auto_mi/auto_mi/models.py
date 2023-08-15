@@ -25,12 +25,12 @@ class SimpleFunctionRecoveryModel(nn.Module, MetadataBase):
 class ConvMNIST(nn.Module, MetadataBase):
     def __init__(self, task):
         super().__init__()
-        self.conv1 = nn.Conv2d(1, 8, 3, 1)  # 1 input channel, 32 output channels, 3x3 kernel
-        self.conv2 = nn.Conv2d(8, 8, 3, 1)
+        self.conv1 = nn.Conv2d(1, 4, 3, 1)  # 1 input channel, 32 output channels, 3x3 kernel
+        self.conv2 = nn.Conv2d(4, 4, 3, 1)
         self.dropout1 = nn.Dropout(0.25)
         self.dropout2 = nn.Dropout(0.5)
-        self.fc1 = nn.Linear(1152, 128)
-        self.fc2 = nn.Linear(128, 11)
+        self.fc1 = nn.Linear(576, 16)
+        self.fc2 = nn.Linear(16, 11)
 
     def forward(self, x):
         x = self.conv1(x)

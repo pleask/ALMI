@@ -27,6 +27,7 @@ if __name__ == "__main__":
     weight_decay = 0.001
 
     task = TrojanMNISTTask(args.seed)
+    # model has ~10k parameters like this
     model = ConvMNIST
     trainer = AdamTrainer(task, epochs, batch_size, weight_decay=weight_decay, prune_amount=prune_amount, device=DEVICE, lr=lr)
 

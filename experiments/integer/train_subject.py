@@ -23,6 +23,7 @@ if __name__ == "__main__":
     prune_amount = 0.
     lr = 0.01
 
+    # the model has 22003 parameters for max_int 7 and 6 inputs
     task = IntegerGroupFunctionRecoveryTask(2**3 - 1, 6, seed=args.seed)
     model = IntegerGroupFunctionRecoveryModel
     trainer = AdamTrainer(task, epochs, batch_size, weight_decay=weight_decay, prune_amount=prune_amount, device=DEVICE, lr=lr)
