@@ -1,5 +1,7 @@
 from abc import ABC, abstractmethod
 
+import numpy as np
+
 import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader
@@ -27,7 +29,7 @@ class AdamTrainer(BaseTrainer):
         self.prune_amount = prune_amount
         self.lr = lr
     
-    def train(self, net, example):
+    def train(self, net, example, validation_example):
         optimizer = optim.Adam(net.parameters(), lr=self.lr, weight_decay=self.weight_decay)
         training_data = DataLoader(example, batch_size=self.batch_size)
 
@@ -41,13 +43,20 @@ class AdamTrainer(BaseTrainer):
                     loss.backward()
                     optimizer.step()
             print('Training loss:', loss.item(), flush=True)
+            validation_loss = self.evaluate(net, validation_example)
+            print('Validation loss:', validation_loss)
+
+        validation_loss = self.evaluate(net, validation_example, final=True)
+        print('Final Validation loss:', validation_loss)
 
         if self.prune_amount > 0.:
             pruner = L1Unstructured(self.prune_amount)
             for _, param in net.named_parameters():
                 param.data = pruner.prune(param.data)
+
+        return validation_loss
     
-    def evaluate(self, net, example):
+    def evaluate(self, net, example, final=False):
         data = DataLoader(example, batch_size=self.batch_size)
         inputs, labels = next(iter(data))
         inputs = inputs.to(self.device)
@@ -55,6 +64,9 @@ class AdamTrainer(BaseTrainer):
         net.eval()
         with torch.no_grad():
             outputs = net(inputs)
+        if final:
+            for x, y in zip(outputs[:20].detach().cpu().numpy(), labels[:20].detach().cpu().numpy()):
+                print('value', int(''.join(map(str, np.round(x).astype(int))), 2), 'label', int(''.join(map(str, np.round(y).astype(int))), 2))
         return self.task.criterion(outputs, labels).detach().cpu().item()
 
     def get_metadata(self):

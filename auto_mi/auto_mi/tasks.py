@@ -431,6 +431,113 @@ class AdversarialMNISTExample(Example):
         return self.patch
 
 
+class IntegerGroupFunctionRecoveryTask(Task):
+    """
+    Labeling functions in this consist of taking a number of integers,
+    performing arithmetic on them, and outputting the result modulo the maximum
+    integer size.
+    
+    For example, we might have 5 integers in [0, 1024), our function is (a * b -
+    c / d + e) mod 1024.
+    
+    The hope with this is that we get smoother functions with a more uniform
+    distribution of numbers, whereas with symbolic function recovery some of the
+    functions had limited ranges and peaky distributions. It's also more aligned
+    with the work on grokking module addition.
+    """
+    criterion = nn.MSELoss()
+
+    operations = [
+        (0, '+'),
+        (1, '-'),
+        (2, '//'),
+        (3, '%'),
+    ]
+
+    def __init__(self, max_integer, input_count, seed=0.):
+        super().__init__(seed=seed)
+        self.max_integer = max_integer
+        self.input_count = input_count
+
+    def get_dataset(self, i, type=TRAIN):
+        """
+        Get the ith example in this task. Specifying the type changes the seed
+        for that example for validation.
+        """
+        generator = random.Random(self.seed + i)
+        operations = [generator.choice(self.operations) for _ in range(self.input_count - 1)]
+        seed = 0 if type == TRAIN else 1
+        return IntegerGroupFunctionRecoveryExample(self.max_integer, operations, seed)
+    
+    @property
+    def mi_output_shape(self):
+        return (self.input_count - 1, len(self.operations))
+
+    @property
+    def input_shape(self):
+        return (self.input_count, self.max_integer.bit_length())
+
+    @property
+    def output_shape(self):
+        return (self.max_integer.bit_length(),)
+
+
+class IntegerGroupFunctionRecoveryExample(Example):
+    def __init__(self, max_integer, operations, seed):
+        self.max_integer = max_integer
+        self.operations = operations
+        self.input_count = len(operations) + 1
+        self.seed = seed
+
+        self.X, self.y = self._get_data()
+
+    def _get_data(self):
+        np.random.seed(self.seed) 
+        X = np.random.randint(low=1, high=self.max_integer + 1, size=(len(self), len(self.operations) + 1))
+        function_string = ''
+        for i in range(len(self.operations) + 1):
+            function_string += f'X[:, {i}]'
+            try:
+                function_string += f' {self.operations[i][1]} '
+            except IndexError:
+                # there is one fewer operation than input integers
+                pass
+        function_string = f'({function_string}) % {self.max_integer + 1}'
+        y = eval(function_string)
+
+        return X, y
+    
+    def __len__(self):
+        return 2**15
+
+    def __getitem__(self, index):
+        input_ints = self.X[index]
+        output_int = self.y[index]
+
+        binary_tensors = [self._get_binary_tensor(num) for num in input_ints]
+        x = torch.stack(binary_tensors)
+        y = self._get_binary_tensor(output_int)
+
+        return x, y 
+
+    def _get_binary_tensor(self, num):
+        num_bits = self.max_integer.bit_length()
+        binary_rep = bin(num)[2:]
+        binary_rep = '0' * (num_bits - len(binary_rep)) + binary_rep  # Zero-pad to specified number of bits
+        binary_list = list(map(int, binary_rep))
+        binary_tensor = torch.tensor(binary_list, dtype=torch.float32)
+        return binary_tensor
+
+    def get_metadata(self):
+        return {'operations': self.operations}
+
+    def get_target(self):
+        operator_indices = [o[0] for o in self.operations]
+        identity_matrix = torch.eye(len(IntegerGroupFunctionRecoveryTask.operations), dtype=torch.float32)
+        one_hot = identity_matrix[operator_indices]
+        return one_hot
+
+
 TASKS = {
     'SymbolicFunctionRecoveryTask': SymbolicFunctionRecoveryTask,
     'SimpleFunctionRecoveryTask': SimpleFunctionRecoveryTask,

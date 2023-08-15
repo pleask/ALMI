@@ -52,10 +52,8 @@ def train_subject_model_batch(task, model, trainer, seed, start_idx, end_idx, pa
             print(f'Skipping model {idx} of {start_idx} to {end_idx}', flush=True)
             continue
 
-        # TODO: Merge these in the trainer so we get validation at each step
-        print(f'Training model {idx} of {start_idx} to {end_idx}', flush=True)
-        trainer.train(net, task.get_dataset(idx))
-        loss = trainer.evaluate(net, task.get_dataset(idx, type=VAL))
+        print(f'Training model {idx} of {start_idx} to {end_idx}, repeat {repeat} of {repeats}', flush=True)
+        loss = trainer.train(net, task.get_dataset(idx), task.get_dataset(idx, type=VAL))
         print(f'Validation loss: {loss}')
 
         net_id = uuid.uuid4()

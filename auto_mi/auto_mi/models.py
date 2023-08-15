@@ -1,3 +1,5 @@
+import math
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -37,6 +39,25 @@ class ConvMNIST(nn.Module, MetadataBase):
         x = F.dropout(x, training=self.training)
         x = self.fc2(x)
         return F.softmax(x, dim=-1)
+
+
+class IntegerGroupFunctionRecoveryModel(nn.Module, MetadataBase):
+    def __init__(self, task):
+        super().__init__()
+
+        flattened_input_size = math.prod(task.input_shape)
+        hidden_layer_size = 1000
+        self.l1 = nn.Linear(flattened_input_size, hidden_layer_size)
+        self.r1 = nn.ReLU()
+        self.l2 = nn.Linear(hidden_layer_size, task.output_shape[0])
+
+    def forward(self, x):
+        x = x.view(x.shape[0], -1)
+        x = self.l1(x)
+        x = self.r1(x)
+        x = self.l2(x)
+        return torch.sigmoid(x)
+
 
 
 SUBJECT_MODELS = {
