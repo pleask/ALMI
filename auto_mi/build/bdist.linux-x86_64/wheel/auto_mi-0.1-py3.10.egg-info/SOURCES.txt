@@ -1,0 +1,12 @@
+setup.py
+auto_mi/__init__.py
+auto_mi/base.py
+auto_mi/mi.py
+auto_mi/models.py
+auto_mi/tasks.py
+auto_mi/trainers.py
+auto_mi/utils.py
+auto_mi.egg-info/PKG-INFO
+auto_mi.egg-info/SOURCES.txt
+auto_mi.egg-info/dependency_links.txt
+auto_mi.egg-info/top_level.txt

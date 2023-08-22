@@ -9,3 +9,4 @@ myenv/
 wandb/
 .vscode/
 data/
+auto_mi/build/
