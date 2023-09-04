@@ -37,6 +37,11 @@ def train_model(model, model_path, optimizer, epochs, train_dataloader, test_dat
 
             wandb.log(log)
 
+        print(targets[0])
+        print(torch.round(outputs[0]))
+        print()
+        print()
+
         torch.save(model.state_dict(), model_path)
 
 

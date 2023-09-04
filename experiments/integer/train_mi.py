@@ -60,7 +60,7 @@ if __name__ == '__main__':
 
     model_path = args.model_path
     task = TASK
-    model = IntegerGroupFunctionRecoveryModel(train_dataset.model_param_count, train_dataset.output_shape, layer_scale=1).to(DEVICE)
+    model = IntegerGroupFunctionRecoveryModel(train_dataset.model_param_count, train_dataset.output_shape, layer_scale=100).to(DEVICE)
     if os.path.exists(args.model_path):
         model.load_state_dict(torch.load(args.model_path))
     optimizer = torch.optim.Adam(model.parameters(), lr=0.0001) #, weight_decay=0.0001)
