@@ -440,6 +440,10 @@ class TrojanMNISTExample(Example):
         return self.patch
 
 
+SUBJECT = 'subject'
+MI = 'mi'
+
+
 class IntegerGroupFunctionRecoveryTask(Task):
     """
     Labeling functions in this consist of taking a number of integers,
@@ -463,12 +467,12 @@ class IntegerGroupFunctionRecoveryTask(Task):
         (3, '%'),
     ]
 
-    def __init__(self, max_integer, input_count, seed=0.):
+    def __init__(self, max_integer=2**3-1, input_count=6, seed=0.):
         super().__init__(seed=seed)
         self.max_integer = max_integer
         self.input_count = input_count
 
-    def get_dataset(self, i, type=TRAIN):
+    def get_dataset(self, i, type=TRAIN, purpose=SUBJECT):
         """
         Get the ith example in this task. Specifying the type changes the seed
         for that example for validation.
@@ -476,7 +480,7 @@ class IntegerGroupFunctionRecoveryTask(Task):
         generator = random.Random(self.seed + i)
         operations = [generator.choice(self.operations) for _ in range(self.input_count - 1)]
         seed = 0 if type == TRAIN else 1
-        return IntegerGroupFunctionRecoveryExample(self.max_integer, operations, seed)
+        return IntegerGroupFunctionRecoveryExample(self.max_integer, operations, seed, purpose=purpose)
     
     @property
     def mi_output_shape(self):
@@ -492,13 +496,16 @@ class IntegerGroupFunctionRecoveryTask(Task):
 
 
 class IntegerGroupFunctionRecoveryExample(Example):
-    def __init__(self, max_integer, operations, seed):
+    def __init__(self, max_integer, operations, seed, purpose=SUBJECT):
         self.max_integer = max_integer
         self.operations = operations
         self.input_count = len(operations) + 1
         self.seed = seed
 
-        self.X, self.y = self._get_data()
+        # don't need to generate subject model data if we're training the MI model
+        self.X, self.y = None, None
+        if purpose == SUBJECT:
+            self.X, self.y = self._get_data()
 
     def _get_data(self):
         np.random.seed(self.seed) 
@@ -551,4 +558,5 @@ TASKS = {
     'SymbolicFunctionRecoveryTask': SymbolicFunctionRecoveryTask,
     'SimpleFunctionRecoveryTask': SimpleFunctionRecoveryTask,
     'AdversarialMNISTTask': TrojanMNISTTask,
+    'IntegerGroupFunctionRecoveryTask': IntegerGroupFunctionRecoveryTask,
 }

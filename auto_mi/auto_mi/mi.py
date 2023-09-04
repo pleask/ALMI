@@ -1,15 +1,14 @@
-from functools import cache
 import json
 import math
 from auto_mi.base import MetadataBase
+from auto_mi.tasks import SimpleFunctionRecoveryTask
 
 import torch
 import torch.nn as nn
-from torch.nn.utils.prune import L1Unstructured
 from torch.utils.data import Dataset
 import wandb
 
-from auto_mi.tasks import TASKS
+from auto_mi.tasks import TASKS, MI
 from auto_mi.models import SUBJECT_MODELS
 
 
@@ -52,7 +51,7 @@ def evaluate_model(model, test_dataloader, device='cpu'):
             break
 
 
-def get_matching_subject_models_names(subject_model_dir, task='SimpleFunctionRecoveryTask', max_loss=1., weight_decay=0., prune_amount=0.):
+def get_matching_subject_models_names(subject_model_dir, task=SimpleFunctionRecoveryTask, max_loss=1., weight_decay=0., prune_amount=0.):
     matching_subject_models_names = []
 
     index_file_path = f'{subject_model_dir}/index.txt'
@@ -60,7 +59,7 @@ def get_matching_subject_models_names(subject_model_dir, task='SimpleFunctionRec
         for line in index_file:
             line = line.strip()
             metadata = json.loads(line)
-            if metadata['task']['name'] != task:
+            if metadata['task']['name'] != task.__name__:
                 continue
             if weight_decay and metadata['trainer']['weight_decay'] != weight_decay:
                 continue
@@ -72,7 +71,6 @@ def get_matching_subject_models_names(subject_model_dir, task='SimpleFunctionRec
     return matching_subject_models_names
 
 
-@cache
 def get_subject_model(net, subject_model_dir, subject_model_name, device='cuda'):
     if device=='cuda':
         net.load_state_dict(torch.load(f"{subject_model_dir}/{subject_model_name}.pickle"))
@@ -98,8 +96,8 @@ class MultifunctionSubjectModelDataset(Dataset):
         name = self.subject_model_ids[idx]
         metadata = self.metadata[name]
 
-        task = TASKS[metadata['task']['name']](metadata['task']['seed'])
-        example = task.get_dataset(metadata['index'])
+        task = TASKS[metadata['task']['name']](seed=metadata['task']['seed'])
+        example = task.get_dataset(metadata['index'], purpose=MI)
         y = example.get_target()
 
         model = get_subject_model(SUBJECT_MODELS[metadata['model']['name']](task), self._subject_model_dir, name)
@@ -107,6 +105,8 @@ class MultifunctionSubjectModelDataset(Dataset):
         x = torch.concat(
             [param.detach().reshape(-1) for _, param in model.named_parameters()]
         ).to(self.device)
+
+        del model
 
         return x, y
 
@@ -199,7 +199,7 @@ class FeedForwardNN(nn.Module, MetadataBase):
         return x
 
 
-class FeedForwardNN2D(nn.Module, MetadataBase):
+class SimpleFunctionRecoveryModel(nn.Module, MetadataBase):
     def __init__(self, in_size, out_shape, layer_scale=1):
         super().__init__()
         self.out_shape = out_shape
@@ -221,3 +221,25 @@ class FeedForwardNN2D(nn.Module, MetadataBase):
         function_encoding = self.softmax(x[:, :, :-1])
         x = torch.cat([function_encoding, x[:, :, -1:]], dim=-1)
         return x
+
+
+class IntegerGroupFunctionRecoveryModel(nn.Module, MetadataBase):
+    def __init__(self, in_size, out_shape, layer_scale=5):
+        super().__init__()
+        self.out_shape = out_shape
+        out_size = torch.zeros(out_shape).view(-1).shape[0]
+        self.fc1 = nn.Linear(in_size, int(64*layer_scale))
+        self.relu1 = nn.ReLU()
+        self.fc2 = nn.Linear(int(64*layer_scale), int(32*layer_scale))
+        self.relu2 = nn.ReLU()
+        self.fc3 = nn.Linear(int(32*layer_scale), out_size)
+        self.softmax = nn.Softmax(dim=-1)
+
+    def forward(self, x):
+        x = self.fc1(x)
+        x = self.relu1(x)
+        x = self.fc2(x)
+        x = self.relu2(x)
+        x = self.fc3(x)
+        x = x.view(-1, *self.out_shape)
+        return self.softmax(x)

@@ -10,16 +10,17 @@ from auto_mi.mi import train_model
 from auto_mi.mi import evaluate_model
 from auto_mi.mi import get_matching_subject_models_names
 from auto_mi.mi import MultifunctionSubjectModelDataset
-
-from auto_mi.mi import SimpleFunctionRecoveryModel
+from auto_mi.tasks import IntegerGroupFunctionRecoveryTask
+from auto_mi.mi import IntegerGroupFunctionRecoveryModel
 from auto_mi.tasks import TASKS
 
 os.environ["WANDB_SILENT"] = "true"
 
 DEVICE = torch.device("cuda")
-TASK = 'SymbolicFunctionRecoveryTask'
-BATCH_SIZE = 1024
+TASK = IntegerGroupFunctionRecoveryTask
+BATCH_SIZE = 2**13
 TRAIN_SPLIT_RATIO = 0.7
+EPOCHS = 100
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--seed", help="Repeat number")
@@ -49,25 +50,24 @@ if __name__ == '__main__':
     wandb.init(config=args, project='bounding-mi', entity='patrickaaleask', reinit=True)
 
     all_matching_subject_models = get_matching_subject_models_names(args.subject_model_dir, task=TASK, max_loss=1., weight_decay=args.weight_decay, prune_amount=args.prune_amount)
-    print(f"Found {len(all_matching_subject_models)}", flush=True)
-    if len(all_matching_subject_models) == 0:
-        quit()
     wandb.config['subject_model_count'] = len(all_matching_subject_models) 
 
     train_sample_count = int(len(all_matching_subject_models) * TRAIN_SPLIT_RATIO)
     train_dataset = MultifunctionSubjectModelDataset(args.subject_model_dir, all_matching_subject_models[:train_sample_count])
-    train_dataloader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
-    test_dataset = MultifunctionSubjectModelDataset(args.subject_model_dir, all_matching_subject_models[train_sample_count:], prune_amount=args.prune_amount)
-    test_dataloader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=True)
+    train_dataloader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=32)
+    test_dataset = MultifunctionSubjectModelDataset(args.subject_model_dir, all_matching_subject_models[train_sample_count:])
+    test_dataloader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=32)
 
     model_path = args.model_path
-    task = TASKS[TASK]
-    model = SimpleFunctionRecoveryModel(train_dataset.model_param_count, train_dataset.output_shape, layer_scale=2).to(DEVICE)
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.00001)
-    criterion = nn.MSELoss()
+    task = TASK
+    model = IntegerGroupFunctionRecoveryModel(train_dataset.model_param_count, train_dataset.output_shape, layer_scale=1).to(DEVICE)
+    if os.path.exists(args.model_path):
+        model.load_state_dict(torch.load(args.model_path))
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.0001) #, weight_decay=0.0001)
+    criterion = nn.CrossEntropyLoss()
 
     print("Training model", flush=True)
-    train_model(model, model_path, optimizer, 1, train_dataloader, test_dataloader, test_dataset,  criterion, device=DEVICE)
+    train_model(model, model_path, optimizer, EPOCHS, train_dataloader, test_dataloader, test_dataset,  criterion, device=DEVICE)
 
     print("Prediction sample", flush=True)
     evaluate_model(model, test_dataloader, device=DEVICE)
