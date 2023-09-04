@@ -545,7 +545,7 @@ class IntegerGroupFunctionRecoveryExample(Example):
         return binary_tensor
 
     def get_metadata(self):
-        return {'operations': self.operations}
+        return {'operations': self.operations, 'input_count': self.input_count}
 
     def get_target(self):
         operator_indices = [o[0] for o in self.operations]
