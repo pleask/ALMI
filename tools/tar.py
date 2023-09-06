@@ -18,6 +18,9 @@ def create_tar_from_index(subject_model_path, tar_file_path):
                 # Extract the "id" field
                 file_id = data['id']
 
+                if len(data['example']['operations']) != 2:
+                    continue
+
                 # Construct the filename of the corresponding .pickle file
                 pickle_file_path = f"{subject_model_path}/{file_id}.pickle"
 
