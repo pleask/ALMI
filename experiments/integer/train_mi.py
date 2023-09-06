@@ -2,12 +2,16 @@ import argparse
 import os
 import random
 
+import pandas as pd
+import matplotlib.pyplot as plt
+import numpy as np
+
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
+import torch.nn.functional as F
 import wandb
 from auto_mi.mi import train_model
-from auto_mi.mi import evaluate_model
 from auto_mi.mi import get_matching_subject_models_names
 from auto_mi.mi import MultifunctionSubjectModelDataset
 from auto_mi.tasks import IntegerGroupFunctionRecoveryTask
@@ -20,7 +24,7 @@ DEVICE = torch.device("cuda")
 TASK = IntegerGroupFunctionRecoveryTask
 BATCH_SIZE = 2**13
 TRAIN_SPLIT_RATIO = 0.7
-EPOCHS = 100
+EPOCHS = 0
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--seed", help="Repeat number")
@@ -35,7 +39,7 @@ parser.add_argument(
 parser.add_argument(
     "--prune_amount",
     type=float,
-    help="Amount by which to prune the subject models before training on them.",
+    help="Prune amount of the subject models.",
     default=0.
 )
 
@@ -67,7 +71,65 @@ if __name__ == '__main__':
     criterion = nn.CrossEntropyLoss()
 
     print("Training model", flush=True)
-    train_model(model, model_path, optimizer, EPOCHS, train_dataloader, test_dataloader, test_dataset,  criterion, device=DEVICE)
+    train_model(model, model_path, optimizer, EPOCHS, train_dataloader, test_dataloader, test_dataset,  criterion, task, device=DEVICE)
 
-    print("Prediction sample", flush=True)
-    evaluate_model(model, test_dataloader, device=DEVICE)
+    losses_dict = {'op1': [], 'op2': [], 'loss': [], 'predicted_op1': [], 'predicted_op2': []}
+    model.eval()
+    with torch.no_grad():
+        for inputs, targets in test_dataloader:
+            outputs = model(inputs.to(DEVICE))
+            targets = targets.to(DEVICE)
+            l1 = F.cross_entropy(outputs[:, 0, :], targets[:, 0, :], reduction='none')
+            l2 = F.cross_entropy(outputs[:, 1, :], targets[:, 1, :], reduction='none')
+            losses = (l1 + l2) / 2.
+            for output, target, loss in zip(outputs, targets, losses):
+                d = task.decode(target)
+                losses_dict['op1'].append(d[0][1])
+                losses_dict['op2'].append(d[1][1])
+                losses_dict['loss'].append(loss.cpu().item())
+                predicted_d = task.decode(output)
+                losses_dict['predicted_op1'].append(predicted_d[0][1])
+                losses_dict['predicted_op2'].append(predicted_d[1][1])
+    
+    df = pd.DataFrame.from_dict(losses_dict)
+    # wandb.log({'validation_losses': wandb.Table(dataframe=df)})
+
+    # # Heatmap 
+    # grouped = df.groupby(['op1', 'op2'])['loss'].mean().reset_index()
+    # pivot_df = grouped.pivot(index='op1', columns='op2', values='loss')
+    # # Create the heatmap
+    # fig, ax = plt.subplots()
+
+    # # Plot the values using matshow
+    # cax = ax.matshow(pivot_df, cmap='coolwarm')
+
+    # # Add colorbar for reference
+    # fig.colorbar(cax)
+
+    # # Set axis labels
+    # ax.set_xticks(np.arange(len(pivot_df.columns)))
+    # ax.set_yticks(np.arange(len(pivot_df.index)))
+
+    # # Label the axis ticks
+    # ax.set_xticklabels(pivot_df.columns)
+    # ax.set_yticklabels(pivot_df.index)
+
+    # # Loop over data dimensions and create text annotations.
+    # for i in range(len(pivot_df.index)):
+    #     for j in range(len(pivot_df.columns)):
+    #         value = pivot_df.iloc[i, j]
+    #         if not np.isnan(value):
+    #             ax.text(j, i, f"{value:.3f}", ha="center", va="center", color="w")
+
+    # fig.savefig("heatmap.png")
+    # wandb.log({"heatmap": wandb.Image("heatmap.png")})
+
+    random_tuples = [(random.randint(1, 1023), random.randint(1, 1023), random.randint(1, 1023)) for _ in range(10000)]
+    for row in df[(df['op1'] != df['predicted_op1']) & (df['op2'] != df['predicted_op2'])].iterrows():
+        correct = 0
+        for t in random_tuples:
+            target = eval(f'({t[0]} {row[1]["op1"]} {t[1]} {row[1]["op2"]} {t[2]}) % 8')
+            output = eval(f'({t[0]} {row[1]["predicted_op1"]} {t[1]} {row[1]["predicted_op2"]} {t[2]}) % 8')
+            if target == output:
+                correct += 1
+        print(row[1]['op1'], row[1]['op2'], row[1]['predicted_op1'], row[1]['predicted_op2'], correct / 100000)

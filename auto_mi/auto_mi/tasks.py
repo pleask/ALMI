@@ -50,6 +50,11 @@ class Task(MetadataBase, ABC):
     def get_metadata(self):
         return super().get_metadata() | {'seed': self.seed}
 
+    @classmethod
+    @abstractmethod
+    def decode(cls, t):
+        pass
+
 
 class Example(MetadataBase, Dataset, ABC):
     @abstractmethod
@@ -458,8 +463,6 @@ class IntegerGroupFunctionRecoveryTask(Task):
     functions had limited ranges and peaky distributions. It's also more aligned
     with the work on grokking module addition.
     """
-    criterion = nn.MSELoss()
-
     operations = [
         (0, '+'),
         (1, '-'),
@@ -471,6 +474,15 @@ class IntegerGroupFunctionRecoveryTask(Task):
         super().__init__(seed=seed)
         self.max_integer = max_integer
         self.input_count = input_count
+
+    def criterion(self, output, target):
+        def to_int(binary_tensor):
+            num_bits = binary_tensor.size(1)
+            powers_of_two = torch.pow(2, torch.arange(num_bits - 1, -1, -1)).to(binary_tensor.device)
+            integers = (binary_tensor * powers_of_two).sum(dim=1)
+            return integers
+        value_loss = nn.MSELoss()(to_int(output), to_int(target))
+        return value_loss
 
     def get_dataset(self, i, type=TRAIN, purpose=SUBJECT):
         """
@@ -493,6 +505,10 @@ class IntegerGroupFunctionRecoveryTask(Task):
     @property
     def output_shape(self):
         return (self.max_integer.bit_length(),)
+
+    @classmethod
+    def decode(cls, t):
+        return [cls.operations[i] for i in torch.argmax(t, dim=-1)]
 
 
 class IntegerGroupFunctionRecoveryExample(Example):

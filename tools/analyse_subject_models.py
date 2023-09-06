@@ -1,7 +1,9 @@
 import pandas as pd
+import numpy as np
 import json
 import sys
 import matplotlib.pyplot as plt
+
 
 def flatten_dict(d, parent_key='', sep='.'):
     items = {}
@@ -13,6 +15,7 @@ def flatten_dict(d, parent_key='', sep='.'):
             items[new_key] = v
     return items
 
+
 def read_jsonl_to_dataframe(file_path):
     records = []
     with open(file_path, 'r') as f:
@@ -21,6 +24,42 @@ def read_jsonl_to_dataframe(file_path):
             flat_record = flatten_dict(record)
             records.append(flat_record)
     return pd.DataFrame(records)
+
+
+def render_interaction_heatmap(df):
+    def extract_second_element(list_of_lists):
+        return [inner_list[1] for inner_list in list_of_lists]
+
+    # Use apply to create new columns
+    df['op1'], df['op2'] = zip(*df['example.operations'].apply(lambda x: extract_second_element(x)))
+    grouped = df.groupby(['op1', 'op2'])['loss'].mean().reset_index()
+    pivot_df = grouped.pivot(index='op1', columns='op2', values='loss')
+    # Create the heatmap
+    fig, ax = plt.subplots()
+
+    # Plot the values using matshow
+    cax = ax.matshow(pivot_df, cmap='coolwarm')
+
+    # Add colorbar for reference
+    fig.colorbar(cax)
+
+    # Set axis labels
+    ax.set_xticks(np.arange(len(pivot_df.columns)))
+    ax.set_yticks(np.arange(len(pivot_df.index)))
+
+    # Label the axis ticks
+    ax.set_xticklabels(pivot_df.columns)
+    ax.set_yticklabels(pivot_df.index)
+
+    # Loop over data dimensions and create text annotations.
+    for i in range(len(pivot_df.index)):
+        for j in range(len(pivot_df.columns)):
+            value = pivot_df.iloc[i, j]
+            if not np.isnan(value):
+                ax.text(j, i, f"{value:.3f}", ha="center", va="center", color="w")
+
+    plt.show()
+
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
@@ -37,6 +76,5 @@ if __name__ == "__main__":
     plt.ylabel('Frequency')
     plt.show()
 
-    print(type(df['example.operations'][0]))
-    df['example.operations'] = df['example.operations'].astype(str)
-    print(df[df['example.operations'] == "[[3, '%'], [2, '//'], [0, '+'], [1, '-'], [3, '%']]"])
+    render_interaction_heatmap(df)
+

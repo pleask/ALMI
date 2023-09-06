@@ -12,7 +12,7 @@ from auto_mi.tasks import TASKS, MI
 from auto_mi.models import SUBJECT_MODELS
 
 
-def train_model(model, model_path, optimizer, epochs, train_dataloader, test_dataloader, test_dataset, criterion, device='cpu'):
+def train_model(model, model_path, optimizer, epochs, train_dataloader, test_dataloader, test_dataset, criterion, task, device='cpu'):
     model.train()
     for _ in range(epochs):
         log = {}
@@ -37,23 +37,7 @@ def train_model(model, model_path, optimizer, epochs, train_dataloader, test_dat
 
             wandb.log(log)
 
-        print(targets[0])
-        print(torch.round(outputs[0]))
-        print()
-        print()
-
         torch.save(model.state_dict(), model_path)
-
-
-def evaluate_model(model, test_dataloader, device='cpu'):
-    model.eval()
-    with torch.no_grad():
-        for inputs, targets in test_dataloader:
-            print('--- Sample output ---', flush=True)
-            outputs = model(inputs.to(device))
-            for target, output in zip(targets, outputs.to(device)):
-                print(target.detach(), output.detach(), flush=True)
-            break
 
 
 def get_matching_subject_models_names(subject_model_dir, task=SimpleFunctionRecoveryTask, max_loss=1., weight_decay=0., prune_amount=0.):
@@ -101,7 +85,8 @@ class MultifunctionSubjectModelDataset(Dataset):
         name = self.subject_model_ids[idx]
         metadata = self.metadata[name]
 
-        task = TASKS[metadata['task']['name']](seed=metadata['task']['seed'])
+        # TODO: This needs to take the task metadata too
+        task = TASKS[metadata['task']['name']](2**3 - 1, 3, seed=metadata['task']['seed'])
         example = task.get_dataset(metadata['index'], purpose=MI)
         y = example.get_target()
 
