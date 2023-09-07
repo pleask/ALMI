@@ -1,3 +1,4 @@
+# TODO: unify with tar ? parallelise? support filtering?
 import sys
 import json
 import os
