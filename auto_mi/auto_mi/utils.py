@@ -2,6 +2,7 @@ import argparse
 import json
 import uuid
 from time import gmtime, strftime
+import random
 
 import torch
 
@@ -42,6 +43,7 @@ def is_unique_model(index_file, seed, index, task, model, trainer):
 
 def train_subject_model_batch(task, model, trainer, seed, start_idx, end_idx, path, device='cpu'):
     for idx in range(start_idx, end_idx):
+        random.seed(a=idx)
         net = model(task).to(device)
 
         try:

@@ -56,13 +56,17 @@ class IntegerGroupFunctionRecoveryModel(nn.Module, MetadataBase):
         hidden_layer_size = 1000
         self.l1 = nn.Linear(flattened_input_size, hidden_layer_size)
         self.r1 = nn.ReLU()
-        self.l2 = nn.Linear(hidden_layer_size, task.output_shape[0])
+        self.l2 = nn.Linear(hidden_layer_size, hidden_layer_size)
+        self.r2 = nn.ReLU()
+        self.l3 = nn.Linear(hidden_layer_size, task.output_shape[0])
 
     def forward(self, x):
         x = x.view(x.shape[0], -1)
         x = self.l1(x)
         x = self.r1(x)
         x = self.l2(x)
+        x = self.r2(x)
+        x = self.l3(x)
         return torch.sigmoid(x)
 
 
