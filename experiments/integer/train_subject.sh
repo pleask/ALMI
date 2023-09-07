@@ -4,7 +4,7 @@
 #SBATCH -p shared
 #SBATCH --time=0-06:00:00
 #SBATCH -o /nobackup/wclv88/bounding-mi-data/integer/outs/slurm-%A_%a.out
-#SBATCH --array 0-1999
+#SBATCH --array 0-199
 
 source /etc/profile
 
