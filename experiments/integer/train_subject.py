@@ -8,7 +8,7 @@ from auto_mi.utils import train_subject_model_batch, get_args_for_slum
 
 
 # cpu actually seems to be faster for these small models (perhaps as less frequent transfers to gpu)
-DEVICE = torch.device("cuda")
+DEVICE = torch.device("cpu")
 
 
 if __name__ == "__main__":
