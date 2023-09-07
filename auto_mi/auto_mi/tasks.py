@@ -393,6 +393,7 @@ class TrojanMNISTTask(Task):
     def output_shape(self):
         return (10,)
 
+
 def median(lst):
     sorted_lst = sorted(lst)
     n = len(sorted_lst)
@@ -406,10 +407,12 @@ def median(lst):
         right_mid = sorted_lst[n // 2]
         return (left_mid + right_mid) / 2
 
+
 def percentile_value(l, p):
     sorted_l = sorted(l)
     index = int(len(sorted_l) * (p))
     return sorted_l[index]
+
 
 class TrojanMNISTExample(Example):
     """

@@ -7,6 +7,8 @@ def create_tar_from_index(subject_model_path, tar_file_path):
     index_file_path = f'{subject_model_path}/index.txt'
     # Open the tar archive for writing
     with tarfile.open(tar_file_path, 'w') as tar:
+        tar.add(index_file_path)
+
         # Open the index file for reading
         with open(index_file_path, 'r') as f:
             # Iterate over each line in the index file
