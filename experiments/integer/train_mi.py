@@ -22,9 +22,9 @@ os.environ["WANDB_SILENT"] = "true"
 
 DEVICE = torch.device("cuda")
 TASK = IntegerGroupFunctionRecoveryTask
-BATCH_SIZE = 2**13
+BATCH_SIZE = 2**10
 TRAIN_SPLIT_RATIO = 0.7
-EPOCHS = 0
+EPOCHS = 100
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--seed", help="Repeat number")
@@ -64,7 +64,7 @@ if __name__ == '__main__':
 
     model_path = args.model_path
     task = TASK
-    model = IntegerGroupFunctionRecoveryModel(train_dataset.model_param_count, train_dataset.output_shape, layer_scale=100).to(DEVICE)
+    model = IntegerGroupFunctionRecoveryModel(train_dataset.model_param_count, train_dataset.output_shape, layer_scale=10).to(DEVICE)
     if os.path.exists(args.model_path):
         model.load_state_dict(torch.load(args.model_path))
     optimizer = torch.optim.Adam(model.parameters(), lr=0.0001) #, weight_decay=0.0001)
@@ -92,39 +92,40 @@ if __name__ == '__main__':
                 losses_dict['predicted_op2'].append(predicted_d[1][1])
     
     df = pd.DataFrame.from_dict(losses_dict)
-    # wandb.log({'validation_losses': wandb.Table(dataframe=df)})
+    wandb.log({'validation_losses': wandb.Table(dataframe=df)})
 
-    # # Heatmap 
-    # grouped = df.groupby(['op1', 'op2'])['loss'].mean().reset_index()
-    # pivot_df = grouped.pivot(index='op1', columns='op2', values='loss')
-    # # Create the heatmap
-    # fig, ax = plt.subplots()
+    # Heatmap 
+    grouped = df.groupby(['op1', 'op2'])['loss'].mean().reset_index()
+    pivot_df = grouped.pivot(index='op1', columns='op2', values='loss')
+    # Create the heatmap
+    fig, ax = plt.subplots()
 
-    # # Plot the values using matshow
-    # cax = ax.matshow(pivot_df, cmap='coolwarm')
+    # Plot the values using matshow
+    cax = ax.matshow(pivot_df, cmap='coolwarm')
 
-    # # Add colorbar for reference
-    # fig.colorbar(cax)
+    # Add colorbar for reference
+    fig.colorbar(cax)
 
-    # # Set axis labels
-    # ax.set_xticks(np.arange(len(pivot_df.columns)))
-    # ax.set_yticks(np.arange(len(pivot_df.index)))
+    # Set axis labels
+    ax.set_xticks(np.arange(len(pivot_df.columns)))
+    ax.set_yticks(np.arange(len(pivot_df.index)))
 
-    # # Label the axis ticks
-    # ax.set_xticklabels(pivot_df.columns)
-    # ax.set_yticklabels(pivot_df.index)
+    # Label the axis ticks
+    ax.set_xticklabels(pivot_df.columns)
+    ax.set_yticklabels(pivot_df.index)
 
-    # # Loop over data dimensions and create text annotations.
-    # for i in range(len(pivot_df.index)):
-    #     for j in range(len(pivot_df.columns)):
-    #         value = pivot_df.iloc[i, j]
-    #         if not np.isnan(value):
-    #             ax.text(j, i, f"{value:.3f}", ha="center", va="center", color="w")
+    # Loop over data dimensions and create text annotations.
+    for i in range(len(pivot_df.index)):
+        for j in range(len(pivot_df.columns)):
+            value = pivot_df.iloc[i, j]
+            if not np.isnan(value):
+                ax.text(j, i, f"{value:.3f}", ha="center", va="center", color="w")
 
-    # fig.savefig("heatmap.png")
-    # wandb.log({"heatmap": wandb.Image("heatmap.png")})
+    fig.savefig("heatmap.png")
+    wandb.log({"heatmap": wandb.Image("heatmap.png")})
 
-    random_tuples = [(random.randint(1, 1023), random.randint(1, 1023), random.randint(1, 1023)) for _ in range(10000)]
+    samples = 10000
+    random_tuples = [(random.randint(1, 1023), random.randint(1, 1023), random.randint(1, 1023)) for _ in range(samples)]
     for row in df[(df['op1'] != df['predicted_op1']) & (df['op2'] != df['predicted_op2'])].iterrows():
         correct = 0
         for t in random_tuples:
@@ -132,4 +133,4 @@ if __name__ == '__main__':
             output = eval(f'({t[0]} {row[1]["predicted_op1"]} {t[1]} {row[1]["predicted_op2"]} {t[2]}) % 8')
             if target == output:
                 correct += 1
-        print(row[1]['op1'], row[1]['op2'], row[1]['predicted_op1'], row[1]['predicted_op2'], correct / 100000)
+        print(row[1]['op1'], row[1]['op2'], row[1]['predicted_op1'], row[1]['predicted_op2'], correct / samples)
