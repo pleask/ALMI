@@ -30,6 +30,7 @@ def create_tar_from_index(subject_model_path, tar_file_path):
                 if os.path.exists(pickle_file_path):
                     # Add the .pickle file to the tar archive
                     tar.add(pickle_file_path)
+                    os.remove(pickle_file_path)
                 else:
                     print(f"Warning: File {pickle_file_path} not found!")
 
