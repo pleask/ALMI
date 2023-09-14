@@ -35,7 +35,7 @@ class AdamTrainer(BaseTrainer):
         training_data = DataLoader(example, batch_size=self.batch_size)
 
         for epoch in range(self.epochs):
-            print(f'Epoch: {epoch}', flush=True)
+            # print(f'Epoch: {epoch}', flush=True)
             for inputs, labels in training_data:
                     optimizer.zero_grad()
                     inputs, labels = inputs.to(self.device), labels.to(self.device)
@@ -43,12 +43,12 @@ class AdamTrainer(BaseTrainer):
                     loss = self.task.criterion(output, labels)
                     loss.backward()
                     optimizer.step()
-            print('Training loss:', loss.item(), flush=True)
+            # print('Training loss:', loss.item(), flush=True)
             validation_loss = self.evaluate(net, validation_example)
-            print('Validation loss:', validation_loss)
+            # print('Validation loss:', validation_loss)
 
         validation_loss = self.evaluate(net, validation_example, final=True)
-        print('Final Validation loss:', validation_loss)
+        # print('Final Validation loss:', validation_loss)
 
         if self.prune_amount > 0.:
             pruner = L1Unstructured(self.prune_amount)
@@ -67,7 +67,8 @@ class AdamTrainer(BaseTrainer):
             outputs = net(inputs)
         if final:
             for o, l in zip(to_int(outputs[:20]), to_int(labels[:20])):
-                print(round(o.item(), 2), l.item())
+                # print(round(o.item(), 2), l.item())
+                continue
         return self.task.criterion(outputs, labels).detach().cpu().item()
 
     def get_metadata(self):

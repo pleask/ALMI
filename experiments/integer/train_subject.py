@@ -23,7 +23,7 @@ if __name__ == "__main__":
     lr = 0.001
 
     # the model has 22003 parameters for max_int 7 and 6 inputs
-    task = IntegerGroupFunctionRecoveryTask(2**3 - 1, 1, seed=args.seed)
+    task = IntegerGroupFunctionRecoveryTask(2**3 - 1, 2, seed=args.seed)
     model = IntegerGroupFunctionRecoveryModel
     trainer = AdamTrainer(task, epochs, batch_size, weight_decay=weight_decay, prune_amount=prune_amount, device=DEVICE, lr=lr)
 

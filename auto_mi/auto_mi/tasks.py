@@ -516,7 +516,6 @@ class IntegerGroupFunctionRecoveryTask(Task):
 
 class IntegerGroupFunctionRecoveryExample(Example):
     def __init__(self, max_integer, operations, seed, purpose=SUBJECT):
-        print(operations)
         self.max_integer = max_integer
         self.operations = operations
         self.input_count = len(operations) + 1
