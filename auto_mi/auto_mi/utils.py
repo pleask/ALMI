@@ -46,8 +46,6 @@ def train_subject_model_batch(task, model, trainer, seed, start_idx, end_idx, pa
         random.seed(a=idx)
         net = model(task).to(device)
 
-        print(sum(p.numel() for p in net.parameters()))
-
         try:
             assert is_unique_model(f'{path}/index.txt', seed, idx, task, net, trainer)
         except FileNotFoundError:

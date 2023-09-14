@@ -1,5 +1,6 @@
 import json
 import math
+import os
 from auto_mi.base import MetadataBase
 from auto_mi.tasks import SimpleFunctionRecoveryTask
 
@@ -56,17 +57,27 @@ def get_matching_subject_models_names(subject_model_dir, task=SimpleFunctionReco
                 continue
             if max_loss and metadata['loss'] > max_loss:
                 continue
+            # Check whether the subject model actually exists as I've previously messed up the index file when tarring.
+            if not os.path.exists(f'{subject_model_dir}/{metadata["id"]}.pickle'):
+                print(f'Model {metadata["id"]} does not exist')
+                continue
             matching_subject_models_names.append(metadata['id'])
     return matching_subject_models_names
 
 
 def get_subject_model(net, subject_model_dir, subject_model_name, device='cuda'):
     if device=='cuda':
-        net.load_state_dict(torch.load(f"{subject_model_dir}/{subject_model_name}.pickle"))
+        try:
+            net.load_state_dict(torch.load(f"{subject_model_dir}/{subject_model_name}.pickle"))
+        except (OSError, EOFError, RuntimeError):
+            raise Exception(f'Failed on {subject_model_name}')
     else:
-        net.load_state_dict(
-            torch.load(f"{subject_model_dir}/{subject_model_name}.pickle", map_location=torch.device('cpu'))
-        )
+        try:
+            net.load_state_dict(
+                torch.load(f"{subject_model_dir}/{subject_model_name}.pickle", map_location=torch.device('cpu'))
+            )
+        except (OSError, EOFError):
+            raise Exception(f'Failed on {subject_model_name}')
     return net
 
 
@@ -141,31 +152,34 @@ class PositionalEncoding(nn.Module):
 class Transformer(nn.Module, MetadataBase):
     def __init__(
         self,
-        input_size,
-        output_size,
+        in_size,
+        out_shape,
         num_layers=6,
         hidden_size=256,
         num_heads=8,
         dropout=0.1,
     ):
         super().__init__()
+        
+        self.out_shape = out_shape
+        output_size = torch.zeros(out_shape).view(-1).shape[0]
 
-        self.embedding = nn.Linear(input_size, hidden_size)
+        self.embedding = nn.Linear(in_size, hidden_size)
         self.pos_encoding = PositionalEncoding(hidden_size, dropout=dropout)
 
         encoder_layer = nn.TransformerEncoderLayer(hidden_size, num_heads)
         self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers)
 
         self.output_layer = nn.Linear(hidden_size, output_size)
+        self.softmax = nn.Softmax(dim=-1)
 
     def forward(self, x):
         x = self.embedding(x)
         x = self.pos_encoding(x)
         x = self.transformer_encoder(x)
-        x = self.output_layer(
-            x.mean(dim=0)
-        )  # use mean pooling to obtain a single output value
-        return x
+        x = self.output_layer(x.mean(dim=0))  # use mean pooling to obtain a single output value
+        x = x.view(-1, *self.out_shape)
+        return self.softmax(x)
 
 
 class FeedForwardNN(nn.Module, MetadataBase):

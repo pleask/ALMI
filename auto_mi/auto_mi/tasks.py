@@ -451,6 +451,11 @@ class TrojanMNISTExample(Example):
 SUBJECT = 'subject'
 MI = 'mi'
 
+def to_int(binary_tensor):
+    num_bits = binary_tensor.size(1)
+    powers_of_two = torch.pow(2, torch.arange(num_bits - 1, -1, -1)).to(binary_tensor.device)
+    integers = (binary_tensor * powers_of_two).sum(dim=1)
+    return integers
 
 class IntegerGroupFunctionRecoveryTask(Task):
     """
@@ -479,11 +484,6 @@ class IntegerGroupFunctionRecoveryTask(Task):
         self.input_count = input_count
 
     def criterion(self, output, target):
-        def to_int(binary_tensor):
-            num_bits = binary_tensor.size(1)
-            powers_of_two = torch.pow(2, torch.arange(num_bits - 1, -1, -1)).to(binary_tensor.device)
-            integers = (binary_tensor * powers_of_two).sum(dim=1)
-            return integers
         value_loss = nn.MSELoss()(to_int(output), to_int(target))
         return value_loss
 
@@ -516,6 +516,7 @@ class IntegerGroupFunctionRecoveryTask(Task):
 
 class IntegerGroupFunctionRecoveryExample(Example):
     def __init__(self, max_integer, operations, seed, purpose=SUBJECT):
+        print(operations)
         self.max_integer = max_integer
         self.operations = operations
         self.input_count = len(operations) + 1

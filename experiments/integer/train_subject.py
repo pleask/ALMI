@@ -8,13 +8,13 @@ from auto_mi.utils import train_subject_model_batch, get_args_for_slum
 
 
 # cpu actually seems to be faster for these small models (perhaps as less frequent transfers to gpu)
-DEVICE = torch.device("cpu")
+DEVICE = torch.device("cuda")
 
 
 if __name__ == "__main__":
     args = get_args_for_slum()
 
-    epochs = 100
+    epochs = 30
     batch_size = 2**11
     # weight_decay = random.choice([0., 0.0001, 0.001, 0.01, 0.1, 1])
     # prune_amount = random.choice([0., 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9])

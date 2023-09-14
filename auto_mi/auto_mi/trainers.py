@@ -8,6 +8,7 @@ from torch.utils.data import DataLoader
 from torch.nn.utils.prune import L1Unstructured
 
 from .base import MetadataBase
+from .tasks import to_int
 
 
 class BaseTrainer(MetadataBase, ABC):
@@ -65,8 +66,8 @@ class AdamTrainer(BaseTrainer):
         with torch.no_grad():
             outputs = net(inputs)
         if final:
-            for o, l in zip(outputs[:].detach().cpu().numpy(), labels[:].detach().cpu().numpy()):
-                print(np.argmax(o), l)
+            for o, l in zip(to_int(outputs[:20]), to_int(labels[:20])):
+                print(round(o.item(), 2), l.item())
         return self.task.criterion(outputs, labels).detach().cpu().item()
 
     def get_metadata(self):
