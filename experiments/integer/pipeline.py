@@ -1,26 +1,28 @@
 """
 Implements the full meta-learning pipeline.
 """
+import os
 import math
-
 import numpy as np
 
 import torch
 from torch.utils.data import Dataset, DataLoader
 import torch.nn as nn
 
+import wandb
+
 from auto_mi.tasks import IntegerGroupFunctionRecoveryTask, VAL
 from auto_mi.base import MetadataBase
 from auto_mi.trainers import AdamTrainer
 from auto_mi.mi import Transformer
 
-EPISODES = 20
-STEPS = 5
-SUBJECT_MODEL_EPOCHS = 10
+EPISODES = 100
+STEPS = 10
+SUBJECT_MODEL_EPOCHS = 3
 SUBJECT_MODEL_BATCH_SIZE = 2**10
 SUBJECT_MODELS_PER_STEP = 10
 INTERPRETABILITY_WEIGHT = 0.5
-DEVICE = 'cuda'
+DEVICE = 'cpu'
 INTERPRETABILITY_BATCH_SIZE = 128
 INTERPRETABILITY_MODEL_EPOCHS = 20
 
@@ -50,8 +52,8 @@ task = IntegerGroupFunctionRecoveryTask(2**3 - 1, 3)
 
 # Define the hyperparameter search space
 hyperparameters = {
-    'weight_decay': [0, 0.1, 0.01, 0.001, 0.0001],
-    'learning_rate': [0.1, 0.01, 0.001, 0.0001],
+    'weight_decay': [0, 0.1],
+    'learning_rate': [0.1, 0.01],
 }
 state_space = [(wd, lr) for wd in hyperparameters['weight_decay'] for lr in hyperparameters['learning_rate']]
 
@@ -118,19 +120,14 @@ class SubjectModelDataset(Dataset):
     def output_shape(self):
         return self[0][1].shape
 
-
 def train_subject_models(task, model, trainer, count):
-    nets = []
-    targets = []
-    losses = []
-    for i in range(count):
-        print(f'Training subject model {i} of {count}')
-        net = model(task).to(DEVICE)
-        loss = trainer.train(net, task.get_dataset(i), task.get_dataset(i, type=VAL))
-
-        nets.append(net)
-        targets.append(task.get_dataset(i).get_target())
-        losses.append(loss)
+    nets = [model(task).to(DEVICE) for _ in range(count)]
+    targets = [task.get_dataset(i).get_target() for i in range(count)]
+    losses = trainer.train_parallel(
+        nets,
+        [task.get_dataset(i) for i in range(count)],
+        [task.get_dataset(i, type=VAL) for i in range(count)],
+    )
     
     subject_model_loss = sum(losses) / len(losses)
     return nets, targets, subject_model_loss
@@ -174,10 +171,11 @@ os.environ["WAND_API_KEY"] = "dd685d7aa9b38a2289e5784a961b81e22fc4c735"
 wandb.init(project='bounding-mi', entity='patrickaaleask', reinit=True)
 
 for episode in range(EPISODES):
-    print(f'Episode {episode}')
+    print(f'Episode {episode} of {EPISODES}')
     state = np.random.randint(len(state_space))
 
     for step in range(STEPS):
+        print(f'Step {step} of {STEPS}')
         action = optimiser_model.get_action(state)
         hp = state_space[action]
 

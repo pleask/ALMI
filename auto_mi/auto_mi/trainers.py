@@ -29,7 +29,7 @@ class AdamTrainer(BaseTrainer):
         self.weight_decay = weight_decay
         self.prune_amount = prune_amount
         self.lr = lr
-    
+
     def train(self, net, example, validation_example):
         optimizer = optim.Adam(net.parameters(), lr=self.lr, weight_decay=self.weight_decay)
         training_data = DataLoader(example, batch_size=self.batch_size)
@@ -43,12 +43,9 @@ class AdamTrainer(BaseTrainer):
                     loss = self.task.criterion(output, labels)
                     loss.backward()
                     optimizer.step()
-            # print('Training loss:', loss.item(), flush=True)
             validation_loss = self.evaluate(net, validation_example)
-            # print('Validation loss:', validation_loss)
 
         validation_loss = self.evaluate(net, validation_example, final=True)
-        # print('Final Validation loss:', validation_loss)
 
         if self.prune_amount > 0.:
             pruner = L1Unstructured(self.prune_amount)
@@ -56,6 +53,33 @@ class AdamTrainer(BaseTrainer):
                 param.data = pruner.prune(param.data)
 
         return validation_loss
+
+    def train_parallel(self, nets, examples, validation_examples):
+        optimizers = [optim.Adam(net.parameters(), lr=self.lr, weight_decay=self.weight_decay) for net in nets]
+        training_dataloaders = [DataLoader(example, batch_size=self.batch_size, shuffle=True, num_workers=32) for example in examples]
+
+        for epoch in range(self.epochs):
+            for net, optimizer, training_data in zip(nets, optimizers, training_dataloaders):
+                net.train()
+                for inputs, labels in training_data:
+                    optimizer.zero_grad()
+                    inputs, labels = inputs.to(self.device), labels.to(self.device)
+                    output = net(inputs)
+                    loss = self.task.criterion(output, labels)
+                    loss.backward()
+                    optimizer.step()
+                net.eval()
+
+        validation_losses = [self.evaluate(net, validation_example, final=True) for net, validation_example in zip(nets, validation_examples)]
+
+        if self.prune_amount > 0.:
+            pruner = L1Unstructured(self.prune_amount)
+            for net in nets:
+                for _, param in net.named_parameters():
+                    param.data = pruner.prune(param.data)
+
+        return validation_losses
+
     
     def evaluate(self, net, example, final=False):
         data = DataLoader(example, batch_size=self.batch_size)
