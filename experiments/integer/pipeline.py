@@ -12,6 +12,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 import torch.nn as nn
 
+import matplotlib.pyplot as plt
 import wandb
 
 from auto_mi.tasks import IntegerGroupFunctionRecoveryTask, VAL
@@ -60,7 +61,17 @@ class RL:
     def update(self, state, action, reward):
         max_next_Q = np.max(self.q_table[action, :])
         self.q_table[state, action] = self.q_table[state, action] + self.learning_rate * (reward + self.discount_factor * max_next_Q - self.q_table[state, action])
-        print(self.q_table)
+        
+        # TODO: Extract the logging from this function
+        plt.imshow(self.q_table, cmap='hot', interpolation='nearest')
+        plt.title('Q Table')
+
+        # Save the plot to a file
+        heatmap_file = 'q_table.png'
+        plt.savefig(heatmap_file)
+
+        # Log the heatmap image to wandb
+        wandb.log({"q_table": wandb.Image(heatmap_file)})
 
     def get_optimal(self):
         best_state_idx = np.unravel_index(np.argmax(self.q_table), self.q_table.shape)[0]
@@ -126,10 +137,22 @@ def train_interpretability_model(interpretability_model, subject_model_names, tr
         interpretability_model.eval()
         test_loss = 0.0
         with torch.no_grad():
+            eval_dict = {'op1': [], 'op2': [], 'predicted_op1': [], 'predicted_op2': []}
             for inputs, targets in test_dataloader:
                 outputs = interpretability_model(inputs.to(DEVICE))
                 loss = criterion(outputs, targets.to(DEVICE))
                 test_loss += loss.item() * inputs.size(0)
+                for output, target in zip(outputs, targets):
+                    d = task.decode(target)
+                    eval_dict['op1'].append(d[0][1])
+                    eval_dict['op2'].append(d[1][1])
+                    predicted_d = task.decode(output)
+                    eval_dict['predicted_op1'].append(predicted_d[0][1])
+                    eval_dict['predicted_op2'].append(predicted_d[1][1])
+            data = list(zip(*eval_dict.values()))
+            columns = list(eval_dict.keys())
+            interpretability_model_predictions = wandb.Table(data=data, columns=columns)
+            wandb.log({"interpretability_model_predictions": interpretability_model_predictions})
         avg_loss = test_loss / len(test_dataset)
 
         for (inputs, targets) in train_dataloader:
