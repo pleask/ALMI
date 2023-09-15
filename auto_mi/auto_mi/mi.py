@@ -49,7 +49,7 @@ def get_matching_subject_models_names(subject_model_dir, task=SimpleFunctionReco
         for line in index_file:
             line = line.strip()
             metadata = json.loads(line)
-            if metadata['task']['name'] != task.__name__:
+            if metadata['task']['name'] != type(task).__name__:
                 continue
             if weight_decay and metadata['trainer']['weight_decay'] != weight_decay:
                 continue
@@ -69,8 +69,8 @@ def get_subject_model(net, subject_model_dir, subject_model_name, device='cuda')
     if device=='cuda':
         try:
             net.load_state_dict(torch.load(f"{subject_model_dir}/{subject_model_name}.pickle"))
-        except (OSError, EOFError, RuntimeError):
-            raise Exception(f'Failed on {subject_model_name}')
+        except (OSError, EOFError, RuntimeError) as e:
+            raise Exception(f'Failed on {subject_model_name}: {e}')
     else:
         try:
             net.load_state_dict(

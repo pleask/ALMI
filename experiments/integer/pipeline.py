@@ -1,9 +1,12 @@
 """
 Implements the full meta-learning pipeline.
 """
+import json
 import os
 import math
 import numpy as np
+from time import strftime, gmtime
+import uuid
 
 import torch
 from torch.utils.data import Dataset, DataLoader
@@ -14,38 +17,19 @@ import wandb
 from auto_mi.tasks import IntegerGroupFunctionRecoveryTask, VAL
 from auto_mi.base import MetadataBase
 from auto_mi.trainers import AdamTrainer
-from auto_mi.mi import Transformer
+from auto_mi.mi import Transformer, get_matching_subject_models_names, MultifunctionSubjectModelDataset
+from auto_mi.models import IntegerGroupFunctionRecoveryModel
 
-EPISODES = 100
-STEPS = 10
-SUBJECT_MODEL_EPOCHS = 3
+EPISODES = 5
+STEPS = 5
+SUBJECT_MODEL_EPOCHS = 10
 SUBJECT_MODEL_BATCH_SIZE = 2**10
-SUBJECT_MODELS_PER_STEP = 10
+SUBJECT_MODELS_PER_STEP = 3
 INTERPRETABILITY_WEIGHT = 0.5
 DEVICE = 'cpu'
 INTERPRETABILITY_BATCH_SIZE = 128
 INTERPRETABILITY_MODEL_EPOCHS = 20
-
-class IntegerGroupFunctionRecoveryModel(nn.Module, MetadataBase):
-    def __init__(self, task):
-        super().__init__()
-
-        flattened_input_size = math.prod(task.input_shape)
-        hidden_layer_size = 100
-        self.l1 = nn.Linear(flattened_input_size, hidden_layer_size)
-        self.r1 = nn.ReLU()
-        self.l2 = nn.Linear(hidden_layer_size, hidden_layer_size)
-        self.r2 = nn.ReLU()
-        self.l3 = nn.Linear(hidden_layer_size, task.output_shape[0])
-
-    def forward(self, x):
-        x = x.view(x.shape[0], -1)
-        x = self.l1(x)
-        x = self.r1(x)
-        x = self.l2(x)
-        x = self.r2(x)
-        x = self.l3(x)
-        return torch.sigmoid(x)
+SUBJECT_MODEL_PATH = './subject_models'
 
 # Define the subject model task we're trying to solve here
 task = IntegerGroupFunctionRecoveryTask(2**3 - 1, 3)
@@ -93,33 +77,7 @@ interpretability_model = Transformer(11403, (2, 2)).to(DEVICE)
 
 # Train the RL model
 
-class SubjectModelDataset(Dataset):
-    def __init__(self, nets, targets):
-        super().__init__()
-        self.nets = nets
-        self.targets = targets
-        self.device = DEVICE
-
-    def __len__(self):
-        return len(self.nets)
-
-    def __getitem__(self, idx):
-        net = self.nets[idx]
-        x = torch.concat(
-            [param.detach().reshape(-1) for _, param in net.named_parameters()]
-        ).to(self.device)
-
-        y = self.targets[idx]
-        return x, y
-
-    @property
-    def model_param_count(self):
-        return self[0][0].shape[0]
-
-    @property
-    def output_shape(self):
-        return self[0][1].shape
-
+# TODO: Commonise this with train_subject_model_batch
 def train_subject_models(task, model, trainer, count):
     nets = [model(task).to(DEVICE) for _ in range(count)]
     targets = [task.get_dataset(i).get_target() for i in range(count)]
@@ -128,17 +86,34 @@ def train_subject_models(task, model, trainer, count):
         [task.get_dataset(i) for i in range(count)],
         [task.get_dataset(i, type=VAL) for i in range(count)],
     )
+
+    for i, (net, target, loss) in enumerate(zip(nets, targets, losses)):
+        net_id = uuid.uuid4()
+        model_path = f'{SUBJECT_MODEL_PATH}/{net_id}.pickle'
+        torch.save(net.state_dict(), model_path)
+        md = {
+            'task': task.get_metadata(),
+            'example': task.get_dataset(i).get_metadata(),
+            'model': net.get_metadata(),
+            'trainer': trainer.get_metadata(),
+            "loss": loss,
+            "id": str(net_id),
+            "time": strftime("%Y-%m-%d %H:%M:%S", gmtime()),
+            "index": i,
+        }
+        with open(f'{SUBJECT_MODEL_PATH}/index.txt', 'a') as md_file:
+            md_file.write(json.dumps(md) + '\n')
     
     subject_model_loss = sum(losses) / len(losses)
-    return nets, targets, subject_model_loss
+    return subject_model_loss
 
 
-# XXX: Does this lead to catastrophic forgetting?
-def train_interpretability_model(interpretability_model, subject_models, subject_targets, train_ratio=0.7):
-    train_sample_count = int(len(subject_models) * train_ratio)
-    train_dataset = SubjectModelDataset(subject_models[:train_sample_count], subject_targets[:train_sample_count])
+def train_interpretability_model(interpretability_model, subject_model_names, train_ratio=0.7):
+    train_sample_count = int(len(subject_model_names) * train_ratio)
+    wandb.log({'subject_model_count': train_sample_count})
+    train_dataset = MultifunctionSubjectModelDataset(SUBJECT_MODEL_PATH, subject_model_names[:train_sample_count])
     train_dataloader = DataLoader(train_dataset, batch_size=INTERPRETABILITY_BATCH_SIZE, shuffle=True, num_workers=0)
-    test_dataset = SubjectModelDataset(subject_models[train_sample_count:], subject_targets[train_sample_count:])
+    test_dataset = MultifunctionSubjectModelDataset(SUBJECT_MODEL_PATH, subject_model_names[train_sample_count:])
     test_dataloader = DataLoader(test_dataset, batch_size=INTERPRETABILITY_BATCH_SIZE, shuffle=True, num_workers=0)
 
     optimizer = torch.optim.Adam(interpretability_model.parameters(), lr=0.00001)
@@ -180,9 +155,10 @@ for episode in range(EPISODES):
         hp = state_space[action]
 
         trainer = AdamTrainer(task, SUBJECT_MODEL_EPOCHS, SUBJECT_MODEL_BATCH_SIZE, weight_decay=hp[0], device=DEVICE, lr=hp[1])
-        subject_models, subject_targets, subject_model_loss = train_subject_models(task, IntegerGroupFunctionRecoveryModel, trainer, SUBJECT_MODELS_PER_STEP)
+        subject_model_loss = train_subject_models(task, IntegerGroupFunctionRecoveryModel, trainer, SUBJECT_MODELS_PER_STEP)
 
-        interpretability_model_loss = train_interpretability_model(interpretability_model, subject_models, subject_targets)
+        subject_model_names = get_matching_subject_models_names(SUBJECT_MODEL_PATH, task=task)
+        interpretability_model_loss = train_interpretability_model(interpretability_model, subject_model_names)
 
         reward = -(INTERPRETABILITY_WEIGHT * interpretability_model_loss + (1 - INTERPRETABILITY_WEIGHT) * subject_model_loss)
         optimiser_model.update(state, action, reward)
