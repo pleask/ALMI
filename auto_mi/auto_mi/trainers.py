@@ -56,9 +56,10 @@ class AdamTrainer(BaseTrainer):
 
     def train_parallel(self, nets, examples, validation_examples):
         optimizers = [optim.Adam(net.parameters(), lr=self.lr, weight_decay=self.weight_decay) for net in nets]
-        training_dataloaders = [DataLoader(example, batch_size=self.batch_size, shuffle=True, num_workers=32) for example in examples]
+        training_dataloaders = [DataLoader(example, batch_size=self.batch_size, shuffle=True) for example in examples]
 
         for epoch in range(self.epochs):
+            print(f'Subject model epoch {epoch}')
             for net, optimizer, training_data in zip(nets, optimizers, training_dataloaders):
                 net.train()
                 for inputs, labels in training_data:

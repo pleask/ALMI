@@ -53,7 +53,7 @@ class IntegerGroupFunctionRecoveryModel(nn.Module, MetadataBase):
         super().__init__()
 
         flattened_input_size = math.prod(task.input_shape)
-        hidden_layer_size = 100
+        hidden_layer_size = 10
         self.l1 = nn.Linear(flattened_input_size, hidden_layer_size)
         self.r1 = nn.ReLU()
         self.l2 = nn.Linear(hidden_layer_size, hidden_layer_size)

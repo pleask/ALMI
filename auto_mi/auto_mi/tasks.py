@@ -528,40 +528,41 @@ class IntegerGroupFunctionRecoveryExample(Example):
 
     def _get_data(self):
         np.random.seed(self.seed) 
-        X = np.random.randint(low=1, high=self.max_integer + 1, size=(len(self), len(self.operations) + 1))
+        int_Xs = np.random.randint(low=1, high=self.max_integer + 1, size=(len(self), len(self.operations) + 1))
         function_string = ''
         for i in range(len(self.operations) + 1):
-            function_string += f'X[:, {i}]'
+            function_string += f'int_Xs[:, {i}]'
             try:
                 function_string += f' {self.operations[i][1]} '
             except IndexError:
                 # there is one fewer operation than input integers
                 pass
         function_string = f'({function_string}) % {self.max_integer + 1}'
-        y = eval(function_string)
+        int_ys = eval(function_string)
 
-        return X, y
+        vectorized_func = np.vectorize(self.int_to_binary_array, otypes=[np.ndarray])
+        binary_Xs = vectorized_func(int_Xs)
+        Xs = np.stack(binary_Xs.ravel()).reshape(binary_Xs.shape + (-1,))
+
+        binary_ys = vectorized_func(int_ys)
+        ys = np.stack(binary_ys.ravel()).reshape(binary_ys.shape + (-1,))
+
+
+        return Xs, ys
+
+    def int_to_binary_array(self, n):
+        num_digits = self.max_integer.bit_length()
+        binary_str = format(n, f'0{num_digits}b')
+        return np.array([int(digit) for digit in binary_str], dtype=np.float32)
     
     def __len__(self):
         return 2**15
 
     def __getitem__(self, index):
-        input_ints = self.X[index]
-        output_int = self.y[index]
+        X = self.X[index]
+        y = self.y[index]
 
-        binary_tensors = [self._get_binary_tensor(num) for num in input_ints]
-        x = torch.stack(binary_tensors)
-        y = self._get_binary_tensor(output_int)
-
-        return x, y 
-
-    def _get_binary_tensor(self, num):
-        num_bits = self.max_integer.bit_length()
-        binary_rep = bin(num)[2:]
-        binary_rep = '0' * (num_bits - len(binary_rep)) + binary_rep  # Zero-pad to specified number of bits
-        binary_list = list(map(int, binary_rep))
-        binary_tensor = torch.tensor(binary_list, dtype=torch.float32)
-        return binary_tensor
+        return X, y 
 
     def get_metadata(self):
         return {'operations': self.operations, 'input_count': self.input_count}
