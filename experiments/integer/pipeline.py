@@ -35,8 +35,9 @@ state_space = [AdamTrainer(task, SUBJECT_MODEL_EPOCHS, SUBJECT_MODELS_BATCH_SIZE
 optimiser_model = QLearner(state_space)
 
 # Set up the interpretability model
-# TODO: Get these sizes from the task 
-interpretability_model = Transformer(213, (1, 2)).to(DEVICE)
+# TODO: Having to initialise a sample model is not lovely
+sample_model = IntegerGroupFunctionRecoveryModel(task)
+interpretability_model = Transformer(sum(p.numel() for p in sample_model.parameters()), task.mi_output_shape).to(DEVICE)
 
 # TODO: Use an evaluator structure instead of function on task
 os.environ["WAND_API_KEY"] = "dd685d7aa9b38a2289e5784a961b81e22fc4c735"
