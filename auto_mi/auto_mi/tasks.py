@@ -6,6 +6,7 @@ from typing import Callable
 
 import numpy as np
 from sympy import symbols, exp, log, sin, cos, lambdify
+import wandb
 
 import torch
 from torch.utils.data import Dataset
@@ -53,6 +54,10 @@ class Task(MetadataBase, ABC):
     @classmethod
     @abstractmethod
     def decode(cls, t):
+        pass
+
+    @abstractmethod
+    def log_validation(self, outputs, targets):
         pass
 
 
@@ -512,6 +517,23 @@ class IntegerGroupFunctionRecoveryTask(Task):
     @classmethod
     def decode(cls, t):
         return [cls.operations[i] for i in torch.argmax(t, dim=-1)]
+
+    def log_validation(self, predictions, targets):
+        target_operations = []
+        predicted_operations = []
+        for prediction, target in zip(predictions, targets):
+            print_operations = lambda ops: str([o[1] for o in ops])
+            target_operations.append(print_operations(self.decode(target)))
+            predicted_operations.append(print_operations(self.decode(prediction)))
+        val_dict = {
+            'target_operations': target_operations,
+            'predicted_operations': predicted_operations,
+        }
+    
+        data = list(zip(*val_dict.values()))
+        columns = list(val_dict.keys())
+        interpretability_model_predictions = wandb.Table(data=data, columns=columns)
+        wandb.log({"interpretability_model_predictions": interpretability_model_predictions})
 
 
 class IntegerGroupFunctionRecoveryExample(Example):

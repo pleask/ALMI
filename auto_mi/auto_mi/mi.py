@@ -1,47 +1,59 @@
 import json
 import math
 import os
-from auto_mi.base import MetadataBase
-from auto_mi.tasks import SimpleFunctionRecoveryTask
 
 import torch
 import torch.nn as nn
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, DataLoader
 import wandb
 
 from auto_mi.tasks import TASKS, MI
 from auto_mi.models import SUBJECT_MODELS
+from auto_mi.base import MetadataBase
+from auto_mi.tasks import SimpleFunctionRecoveryTask
 
+TRAIN_RATIO = 0.7
+INTERPRETABILITY_BATCH_SIZE = 128
 
-def train_model(model, model_path, optimizer, epochs, train_dataloader, test_dataloader, test_dataset, criterion, task, device='cpu'):
+def train_interpretability_model(model, task, subject_model_path):
+    device = model.device
+    model_names = get_matching_subject_models_names(subject_model_path, task=task)
+    train_sample_count = int(TRAIN_RATIO * len(model_names))
+    wandb.log({'subject_model_count': train_sample_count})
+    train_dataset = MultifunctionSubjectModelDataset(subject_model_path, model_names[:train_sample_count])
+    train_dataloader = DataLoader(train_dataset, batch_size=INTERPRETABILITY_BATCH_SIZE, shuffle=True, num_workers=1)
+    test_dataset = MultifunctionSubjectModelDataset(subject_model_path, model_names[train_sample_count:])
+    test_dataloader = DataLoader(test_dataset, batch_size=INTERPRETABILITY_BATCH_SIZE, shuffle=True, num_workers=1)
+
+    # TODO: Take these as a parameter as will vary by task and model.
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.00001)
+    criterion = nn.MSELoss()
+    epochs = 30
+
     model.train()
-    for _ in range(epochs):
-        log = {}
-
-        model.eval()
-        test_loss = 0.0
-        with torch.no_grad():
-            for inputs, targets in test_dataloader:
-                outputs = model(inputs.to(device))
-                loss = criterion(outputs, targets.to(device))
-                test_loss += loss.item() * inputs.size(0)
-        avg_loss = test_loss / len(test_dataset)
-        log = log | {'validation_loss': avg_loss}
-
+    for epoch in range(epochs):
+        train_loss = 0.
         for (inputs, targets) in train_dataloader:
-            log = log | {'loss': loss}
             optimizer.zero_grad()
             outputs = model(inputs.to(device))
             loss = criterion(outputs, targets.to(device))
             loss.backward()
             optimizer.step()
+            train_loss += loss
 
-            wandb.log(log)
+    model.eval()
+    with torch.no_grad():
+        eval_loss = 0.
+        for inputs, targets in test_dataloader:
+            outputs = model(inputs.to(device))
+            loss = criterion(outputs, targets.to(device))
+            eval_loss += loss.item()
+            task.log_validation(outputs, targets)
+    
+    return train_loss / len(train_dataloader), eval_loss / len(test_dataloader)
 
-        torch.save(model.state_dict(), model_path)
 
-
-def get_matching_subject_models_names(subject_model_dir, task=SimpleFunctionRecoveryTask, max_loss=1., weight_decay=0., prune_amount=0.):
+def get_matching_subject_models_names(subject_model_dir, task=SimpleFunctionRecoveryTask):
     matching_subject_models_names = []
 
     index_file_path = f'{subject_model_dir}/index.txt'
@@ -50,12 +62,6 @@ def get_matching_subject_models_names(subject_model_dir, task=SimpleFunctionReco
             line = line.strip()
             metadata = json.loads(line)
             if metadata['task']['name'] != type(task).__name__:
-                continue
-            if weight_decay and metadata['trainer']['weight_decay'] != weight_decay:
-                continue
-            if prune_amount and metadata['trainer']['prune_amount'] != prune_amount:
-                continue
-            if max_loss and metadata['loss'] > max_loss:
                 continue
             # Check whether the subject model actually exists as I've previously messed up the index file when tarring.
             if not os.path.exists(f'{subject_model_dir}/{metadata["id"]}.pickle'):
@@ -158,6 +164,7 @@ class Transformer(nn.Module, MetadataBase):
         hidden_size=256,
         num_heads=8,
         dropout=0.1,
+        device='cpu',
     ):
         super().__init__()
         
@@ -172,6 +179,7 @@ class Transformer(nn.Module, MetadataBase):
 
         self.output_layer = nn.Linear(hidden_size, output_size)
         self.softmax = nn.Softmax(dim=-1)
+        self.device = device
 
     def forward(self, x):
         x = self.embedding(x)

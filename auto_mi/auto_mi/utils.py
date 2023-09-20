@@ -41,40 +41,35 @@ def is_unique_model(index_file, seed, index, task, model, trainer):
     return True
 
 
-def train_subject_model_batch(task, model, trainer, seed, start_idx, end_idx, path, device='cpu'):
-    for idx in range(start_idx, end_idx):
-        random.seed(a=idx)
-        net = model(task).to(device)
+def train_subject_models(task, model, trainer, subject_model_path, count=5, device='cpu'):
+    nets = [model(task).to(device) for _ in range(count)]
+    targets = [task.get_dataset(i).get_target() for i in range(count)]
+    losses = trainer.train_parallel(
+        nets,
+        [task.get_dataset(i) for i in range(count)],
+        [task.get_dataset(i, type=VAL) for i in range(count)],
+    )
 
-        try:
-            assert is_unique_model(f'{path}/index.txt', seed, idx, task, net, trainer)
-        except FileNotFoundError:
-            pass
-        except AssertionError:
-            print(f'Skipping model {idx} of {start_idx} to {end_idx}', flush=True)
-            continue
-
-        print(f'Training model {idx} of {start_idx} to {end_idx}', flush=True)
-        loss = trainer.train(net, task.get_dataset(idx), task.get_dataset(idx, type=VAL))
-        print(f'Validation loss: {loss}')
-
+    for i, (net, target, loss) in enumerate(zip(nets, targets, losses)):
         net_id = uuid.uuid4()
+        model_path = f'{subject_model_path}/{net_id}.pickle'
+        torch.save(net.state_dict(), model_path)
         md = {
             'task': task.get_metadata(),
-            'example': task.get_dataset(idx).get_metadata(),
+            'example': task.get_dataset(i).get_metadata(),
             'model': net.get_metadata(),
             'trainer': trainer.get_metadata(),
             "loss": loss,
             "id": str(net_id),
             "time": strftime("%Y-%m-%d %H:%M:%S", gmtime()),
-            "index": idx,
+            "index": i,
         }
-
-        with open(f'{path}/index.txt', 'a') as md_file:
+        with open(f'{subject_model_path}/index.txt', 'a') as md_file:
             md_file.write(json.dumps(md) + '\n')
+    
+    subject_model_loss = sum(losses) / len(losses)
+    return subject_model_loss
 
-        model_path = get_model_path(path, net_id) 
-        torch.save(net.state_dict(), model_path)
 
 def get_args_for_slum():
     """
@@ -84,22 +79,5 @@ def get_args_for_slum():
         description="Trains subject models, ie. the models that implement the labeling function."
     )
     parser.add_argument("--path", type=str, help="Directory to which to save the models")
-    parser.add_argument(
-        "--seed",
-        type=int,
-        help="The random seed to use at an experiment level. Used in conjunction with the index to provide a random seed to each model training run.",
-    )
-    parser.add_argument(
-        "--start_idx",
-        type=int,
-        help="The start index of the subject models.",
-        required=True
-    )
-    parser.add_argument(
-        "--end_idx",
-        type=int,
-        help="The end index of the subject models (non-inclusive).",
-        required=True
-    )
     args = parser.parse_args()
     return args
