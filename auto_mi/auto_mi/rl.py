@@ -71,12 +71,13 @@ def train_optimiser_model(optimiser_model, interpretability_model, subject_model
             trainer = optimiser_model.state_space[action]
 
             # Use the current trainer to train new subject models
-            subject_model_loss = train_subject_models(task, subject_model, trainer, subject_model_path, count=subject_models_per_step)
+            subject_model_loss = train_subject_models(task, subject_model, trainer, subject_model_path, count=subject_models_per_step, device=interpretability_model.device)
 
             # Train the interpretability model using the new subject models and existing subject models
             interpretability_model_loss, validation_loss = train_interpretability_model(interpretability_model, task, subject_model_path)
 
             reward = -(interpretability_weight * interpretability_model_loss + (1 - interpretability_weight) * subject_model_loss)
+            optimiser_model.update(state, action, reward)
 
             state = action
 

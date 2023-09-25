@@ -61,6 +61,7 @@ class AdamTrainer(BaseTrainer):
         for epoch in range(self.epochs):
             print(f'Subject model epoch {epoch}')
             for net, optimizer, training_data in zip(nets, optimizers, training_dataloaders):
+                net = net.to(self.device)
                 net.train()
                 for inputs, labels in training_data:
                     optimizer.zero_grad()
