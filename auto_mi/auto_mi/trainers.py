@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-import numpy as np
+from tqdm import tqdm
 
 import torch
 import torch.optim as optim
@@ -58,8 +58,7 @@ class AdamTrainer(BaseTrainer):
         optimizers = [optim.Adam(net.parameters(), lr=self.lr, weight_decay=self.weight_decay) for net in nets]
         training_dataloaders = [DataLoader(example, batch_size=self.batch_size, shuffle=True) for example in examples]
 
-        for epoch in range(self.epochs):
-            print(f'Subject model epoch {epoch}')
+        for epoch in tqdm(range(self.epochs), desc='Subject model epochs'):
             for net, optimizer, training_data in zip(nets, optimizers, training_dataloaders):
                 net = net.to(self.device)
                 net.train()

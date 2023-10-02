@@ -6,6 +6,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 import wandb
+from tqdm import tqdm
 
 from auto_mi.tasks import TASKS, MI
 from auto_mi.models import SUBJECT_MODELS
@@ -15,15 +16,22 @@ from auto_mi.tasks import SimpleFunctionRecoveryTask
 TRAIN_RATIO = 0.7
 INTERPRETABILITY_BATCH_SIZE = 128
 
-def train_interpretability_model(model, task, subject_model_path):
+# TODO: Add wandb logging of the trained models
+def train_interpretability_model(model, task, subject_model_path, validation_subject_models):
     device = model.device
-    model_names = get_matching_subject_models_names(subject_model_path, task=task)
-    train_sample_count = int(TRAIN_RATIO * len(model_names))
-    wandb.log({'subject_model_count': train_sample_count})
-    train_dataset = MultifunctionSubjectModelDataset(subject_model_path, model_names[:train_sample_count])
+
+    # Train the interpretability model on all the subject models that are not
+    # going to be used for validation.
+    training_model_names = get_matching_subject_models_names(subject_model_path, task=task, exclude=validation_subject_models)
+    wandb.log({'subject_model_count': training_model_names})
+    train_dataset = MultifunctionSubjectModelDataset(subject_model_path, training_model_names)
     train_dataloader = DataLoader(train_dataset, batch_size=INTERPRETABILITY_BATCH_SIZE, shuffle=True, num_workers=1)
-    test_dataset = MultifunctionSubjectModelDataset(subject_model_path, model_names[train_sample_count:])
-    test_dataloader = DataLoader(test_dataset, batch_size=INTERPRETABILITY_BATCH_SIZE, shuffle=True, num_workers=1)
+
+    # The performance of the interpretability model is evaluated on the
+    # validation subject models, which were all created by the same trainer in
+    # this step.
+    eval_dataset = MultifunctionSubjectModelDataset(subject_model_path, validation_subject_models)
+    eval_dataloader = DataLoader(eval_dataset, batch_size=INTERPRETABILITY_BATCH_SIZE, shuffle=True, num_workers=1)
 
     # TODO: Take these as a parameter as will vary by task and model.
     optimizer = torch.optim.Adam(model.parameters(), lr=0.00001)
@@ -31,7 +39,7 @@ def train_interpretability_model(model, task, subject_model_path):
     epochs = 30
 
     model.train()
-    for epoch in range(epochs):
+    for epoch in tqdm(range(epochs), desc='Interpretability model epochs'):
         train_loss = 0.
         for (inputs, targets) in train_dataloader:
             optimizer.zero_grad()
@@ -44,16 +52,16 @@ def train_interpretability_model(model, task, subject_model_path):
     model.eval()
     with torch.no_grad():
         eval_loss = 0.
-        for inputs, targets in test_dataloader:
+        for inputs, targets in eval_dataloader:
             outputs = model(inputs.to(device))
             loss = criterion(outputs, targets.to(device))
             eval_loss += loss.item()
-            task.log_validation(outputs, targets)
     
-    return train_loss / len(train_dataloader), eval_loss / len(test_dataloader)
+    return eval_loss / len(eval_dataloader)
 
 
-def get_matching_subject_models_names(subject_model_dir, task=SimpleFunctionRecoveryTask):
+# TODO: Implement exclusion list
+def get_matching_subject_models_names(subject_model_dir, task=SimpleFunctionRecoveryTask, exclude=[]):
     matching_subject_models_names = []
 
     index_file_path = f'{subject_model_dir}/index.txt'
@@ -66,6 +74,8 @@ def get_matching_subject_models_names(subject_model_dir, task=SimpleFunctionReco
             # Check whether the subject model actually exists as I've previously messed up the index file when tarring.
             if not os.path.exists(f'{subject_model_dir}/{metadata["id"]}.pickle'):
                 print(f'Model {metadata["id"]} does not exist')
+                continue
+            if metadata['id'] in exclude:
                 continue
             matching_subject_models_names.append(metadata['id'])
     return matching_subject_models_names
@@ -164,7 +174,6 @@ class Transformer(nn.Module, MetadataBase):
         hidden_size=256,
         num_heads=8,
         dropout=0.1,
-        device='cpu',
     ):
         super().__init__()
         
@@ -179,7 +188,6 @@ class Transformer(nn.Module, MetadataBase):
 
         self.output_layer = nn.Linear(hidden_size, output_size)
         self.softmax = nn.Softmax(dim=-1)
-        self.device = device
 
     def forward(self, x):
         x = self.embedding(x)
@@ -188,6 +196,10 @@ class Transformer(nn.Module, MetadataBase):
         x = self.output_layer(x.mean(dim=0))  # use mean pooling to obtain a single output value
         x = x.view(-1, *self.out_shape)
         return self.softmax(x)
+
+    @property
+    def device(self):
+        return self.output_layer.weight.device
 
 
 class FeedForwardNN(nn.Module, MetadataBase):

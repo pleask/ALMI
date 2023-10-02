@@ -2,11 +2,11 @@ import argparse
 import json
 import uuid
 from time import gmtime, strftime
-import random
 
 import torch
 
 from auto_mi.tasks import VAL
+from auto_mi.mi import TRAIN_RATIO
 
 get_model_path = lambda path, net_idx: f"{path}/{net_idx}.pickle"
 
@@ -41,7 +41,13 @@ def is_unique_model(index_file, seed, index, task, model, trainer):
     return True
 
 
-def train_subject_models(task, model, trainer, subject_model_path, count=5, device='cpu'):
+def train_subject_models(task, model, trainer, subject_model_path, count=10, device='cpu'):
+    """
+    Trains subject models using the specified trainer. Returns the average loss
+    of the subject models, and a sub-group of the trained subject models that
+    are used to validate the performance of the interpretability model on
+    subject models created by this trainer.
+    """
     nets = [model(task).to(device) for _ in range(count)]
     targets = [task.get_dataset(i).get_target() for i in range(count)]
     losses = trainer.train_parallel(
@@ -50,6 +56,7 @@ def train_subject_models(task, model, trainer, subject_model_path, count=5, devi
         [task.get_dataset(i, type=VAL) for i in range(count)],
     )
 
+    model_ids = []
     for i, (net, target, loss) in enumerate(zip(nets, targets, losses)):
         net_id = uuid.uuid4()
         model_path = f'{subject_model_path}/{net_id}.pickle'
@@ -66,9 +73,14 @@ def train_subject_models(task, model, trainer, subject_model_path, count=5, devi
         }
         with open(f'{subject_model_path}/index.txt', 'a') as md_file:
             md_file.write(json.dumps(md) + '\n')
+
+        model_ids.append(str(net_id))
     
     subject_model_loss = sum(losses) / len(losses)
-    return subject_model_loss
+
+    validation_subject_model_ids = model_ids[int(TRAIN_RATIO * count):]
+
+    return subject_model_loss, validation_subject_model_ids
 
 
 def get_args_for_slum():

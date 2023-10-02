@@ -1,4 +1,6 @@
 from abc import ABC, abstractmethod
+import random
+
 import matplotlib.pyplot as plt
 import numpy as np
 import wandb
@@ -53,7 +55,9 @@ class QLearner:
         plt.savefig(heatmap_file)
 
         # Log the heatmap image to wandb
-        wandb.log({"q_table": wandb.Image(heatmap_file)})
+        wandb.log({
+            "q_table": wandb.Image(heatmap_file)
+        })
 
     def get_optimal(self):
         best_state_idx = np.unravel_index(np.argmax(self.q_table), self.q_table.shape)[0]
@@ -61,29 +65,67 @@ class QLearner:
         return best_state
 
 
-def train_optimiser_model(optimiser_model, interpretability_model, subject_model_path, subject_model, task, episodes, steps, subject_models_per_step=10, interpretability_weight=0.5):
+def train_optimiser_model(optimiser_model, interpretability_models, subject_model_path, subject_model, task, episodes, steps, subject_models_per_step=10, interpretability_weight=0.5):
+    reward_history = [[] for _ in range(len(optimiser_model.state_space))]
+    subject_model_loss_history = [[] for _ in range(len(optimiser_model.state_space))]
+    interpretability_model_loss_history = [[] for _ in range(len(optimiser_model.state_space))]
+
     for episode in range(episodes):
         print(f'Episode {episode} of {episodes}')
         state = np.random.randint(len(optimiser_model.state_space))
+
         for step in range(steps):
             print(f'Step {step} of {steps}')
             action = optimiser_model.get_action(state)
             trainer = optimiser_model.state_space[action]
+            interpretability_model = interpretability_models[action]
 
             # Use the current trainer to train new subject models
-            subject_model_loss = train_subject_models(task, subject_model, trainer, subject_model_path, count=subject_models_per_step, device=interpretability_model.device)
+            subject_model_loss, validation_subject_models = train_subject_models(task, subject_model, trainer, subject_model_path, count=subject_models_per_step, device=interpretability_model.device)
 
             # Train the interpretability model using the new subject models and existing subject models
-            interpretability_model_loss, validation_loss = train_interpretability_model(interpretability_model, task, subject_model_path)
+            # TODO: training the model on all the subject models will be slow, maybe use a random sub sample at each step?
+            interpretability_loss = train_interpretability_model(interpretability_model, task, subject_model_path, validation_subject_models)
 
-            reward = -(interpretability_weight * interpretability_model_loss + (1 - interpretability_weight) * subject_model_loss)
+            reward = -(interpretability_weight * interpretability_loss + (1 - interpretability_weight) * subject_model_loss)
             optimiser_model.update(state, action, reward)
 
             state = action
 
+            reward_history[state].append(reward)
+            subject_model_loss_history[state].append(subject_model_loss)
+            interpretability_model_loss_history[state].append(interpretability_loss)
+
             wandb.log({
-                'interpretability_loss': interpretability_model_loss,
-                'subject_model_loss': subject_model_loss,
-                'reward': reward,
-                'validation_interpretability_loss': validation_loss,
+                "reward" : wandb.plot.line_series(
+                    xs=list(range(max([len(rw) for rw in reward_history]))), 
+                    ys=reward_history,
+                    keys=[str(trainer.get_metadata()) for trainer in optimiser_model.state_space],
+                    title="Reward",
+                    xname='Step',
+                ),
+                "subject_model_loss" : wandb.plot.line_series(
+                    xs=list(range(max([len(rw) for rw in subject_model_loss_history]))), 
+                    ys=subject_model_loss_history,
+                    keys=[str(trainer.get_metadata()) for trainer in optimiser_model.state_space],
+                    title="Subject Model Loss",
+                    xname='Step',
+                ),
+                "interpretability_model_loss" : wandb.plot.line_series(
+                    xs=list(range(max([len(rw) for rw in interpretability_model_loss_history]))), 
+                    ys=interpretability_model_loss_history,
+                    keys=[str(trainer.get_metadata()) for trainer in optimiser_model.state_space],
+                    title="Interpretability Model Loss",
+                    xname='Step',
+                ),
             })
+
+
+def pretrain_subject_models(optimiser_model, subject_model_path, subject_model, task, batch_size=10):
+    """
+    Trains random samples of subject models. This is so the dataset generation
+    can happen in a highly distributed manner (ie. ~2k CPUs) on Hamilton, rather
+    than as part of the pipeline process, which can only access ~64 CPUs.
+    """
+    trainer = random.choice(optimiser_model.state_space)
+    train_subject_models(task, subject_model, trainer, subject_model_path, count=batch_size)
