@@ -113,7 +113,7 @@ class MultifunctionSubjectModelDataset(Dataset):
         metadata = self.metadata[name]
 
         # TODO: This needs to take the task metadata too
-        task = TASKS[metadata['task']['name']](2**1 - 1, 2, seed=metadata['task']['seed'])
+        task = TASKS[metadata['task']['name']](**metadata['task'])
         example = task.get_dataset(metadata['index'], purpose=MI)
         y = example.get_target()
 

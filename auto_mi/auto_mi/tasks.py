@@ -479,7 +479,7 @@ class IntegerGroupFunctionRecoveryTask(Task):
         # (3, '%'),
     ]
 
-    def __init__(self, max_integer=2**3-1, input_count=6, seed=0.):
+    def __init__(self, max_integer=2**3-1, input_count=6, seed=0., **_):
         super().__init__(seed=seed)
         self.max_integer = max_integer
         self.input_count = input_count
@@ -513,6 +513,9 @@ class IntegerGroupFunctionRecoveryTask(Task):
     @classmethod
     def decode(cls, t):
         return [cls.operations[i] for i in torch.argmax(t, dim=-1)]
+
+    def get_metadata(self):
+        return super().get_metadata() | {'max_integer': self.max_integer, 'input_count': self.input_count}
 
 
 

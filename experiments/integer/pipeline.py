@@ -29,7 +29,7 @@ HYPERPARAMETERS = {
     'weight_decay': [0, 0.1],
     'learning_rate': [0.1, 0.01],
 }
-STATE_SPACE = [AdamTrainer(TASK, SUBJECT_MODEL_EPOCHS, SUBJECT_MODELS_BATCH_SIZE, weight_decay=wd, lr=lr, device=DEVICE) for wd in HYPERPARAMETERS['weight_decay'] for lr in hyperparameters['learning_rate']]
+STATE_SPACE = [AdamTrainer(TASK, SUBJECT_MODEL_EPOCHS, SUBJECT_MODELS_BATCH_SIZE, weight_decay=wd, lr=lr, device=DEVICE) for wd in HYPERPARAMETERS['weight_decay'] for lr in HYPERPARAMETERS['learning_rate']]
 
 OPTIMISER_MODEL = QLearner(STATE_SPACE)
 
