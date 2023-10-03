@@ -90,10 +90,6 @@ class AdamTrainer(BaseTrainer):
         net.eval()
         with torch.no_grad():
             outputs = net(inputs)
-        if final:
-            for o, l in zip(to_int(outputs[:20]), to_int(labels[:20])):
-                # print(round(o.item(), 2), l.item())
-                continue
         return self.task.criterion(outputs, labels).detach().cpu().item()
 
     def get_metadata(self):

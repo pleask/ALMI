@@ -1,6 +1,7 @@
 import json
 import math
 import os
+import random
 
 import torch
 import torch.nn as nn
@@ -14,24 +15,27 @@ from auto_mi.base import MetadataBase
 from auto_mi.tasks import SimpleFunctionRecoveryTask
 
 TRAIN_RATIO = 0.7
-INTERPRETABILITY_BATCH_SIZE = 128
+INTERPRETABILITY_BATCH_SIZE = 2**8
 
 # TODO: Add wandb logging of the trained models
-def train_interpretability_model(model, task, subject_model_path, validation_subject_models):
+def train_interpretability_model(model, task, subject_model_path, validation_subject_models, reuse_count=1000):
     device = model.device
 
     # Train the interpretability model on all the subject models that are not
     # going to be used for validation.
     training_model_names = get_matching_subject_models_names(subject_model_path, task=task, exclude=validation_subject_models)
+    training_model_names = random.sample(training_model_names, reuse_count)
+    print(f'Using {len(training_model_names)} subject models')
+
     wandb.log({'subject_model_count': training_model_names})
     train_dataset = MultifunctionSubjectModelDataset(subject_model_path, training_model_names)
-    train_dataloader = DataLoader(train_dataset, batch_size=INTERPRETABILITY_BATCH_SIZE, shuffle=True, num_workers=1)
+    train_dataloader = DataLoader(train_dataset, batch_size=INTERPRETABILITY_BATCH_SIZE, shuffle=True, num_workers=24)
 
     # The performance of the interpretability model is evaluated on the
     # validation subject models, which were all created by the same trainer in
     # this step.
     eval_dataset = MultifunctionSubjectModelDataset(subject_model_path, validation_subject_models)
-    eval_dataloader = DataLoader(eval_dataset, batch_size=INTERPRETABILITY_BATCH_SIZE, shuffle=True, num_workers=1)
+    eval_dataloader = DataLoader(eval_dataset, batch_size=INTERPRETABILITY_BATCH_SIZE, shuffle=True, num_workers=24)
 
     # TODO: Take these as a parameter as will vary by task and model.
     optimizer = torch.optim.Adam(model.parameters(), lr=0.00001)
@@ -104,15 +108,17 @@ class MultifunctionSubjectModelDataset(Dataset):
         self.device = device
 
         self.metadata = self._index_metadata()
+        self.cache = {}
 
     def __len__(self):
         return len(self.subject_model_ids)
 
     def __getitem__(self, idx):
+        if idx in self.cache:
+            return self.cache[idx][0], self.cache[idx][1]
         name = self.subject_model_ids[idx]
         metadata = self.metadata[name]
 
-        # TODO: This needs to take the task metadata too
         task = TASKS[metadata['task']['name']](**metadata['task'])
         example = task.get_dataset(metadata['index'], purpose=MI)
         y = example.get_target()
@@ -124,6 +130,8 @@ class MultifunctionSubjectModelDataset(Dataset):
         ).to(self.device)
 
         del model
+
+        self.cache[idx] = (x, y)
 
         return x, y
 

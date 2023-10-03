@@ -1,3 +1,4 @@
+
 """
 Implements the full meta-learning pipeline.
 """
@@ -6,24 +7,24 @@ import os
 import torch
 import wandb
 
-from auto_mi.tasks import IntegerGroupFunctionRecoveryTask
+from auto_mi.tasks import TrojanMNISTTask
 from auto_mi.trainers import AdamTrainer
 from auto_mi.mi import Transformer
-from auto_mi.models import IntegerGroupFunctionRecoveryModel
+from auto_mi.models import ConvMNIST
 from auto_mi.rl import QLearner, train_optimiser_model
 
-EPISODES = 1
-STEPS = 1
-SUBJECT_MODEL_EPOCHS = 30
+EPISODES = 100
+STEPS = 10
+SUBJECT_MODEL_EPOCHS = 1
 SUBJECT_MODELS_BATCH_SIZE = 2**10
 SUBJECT_MODELS_PER_STEP = 10
 INTERPRETABILITY_WEIGHT = 1.
 DEVICE = 'cuda'
-INTERPRETABILITY_BATCH_SIZE = 128
+INTERPRETABILITY_BATCH_SIZE = 2**10
 INTERPRETABILITY_MODEL_EPOCHS = 20
 SUBJECT_MODEL_PATH = './subject_models'
-TASK = IntegerGroupFunctionRecoveryTask(2**1 - 1, 2)
-SUBJECT_MODEL = IntegerGroupFunctionRecoveryModel
+TASK = TrojanMNISTTask()
+SUBJECT_MODEL = ConvMNIST
 HYPERPARAMETERS = {
     'weight_decay': [0, 0.1],
     'learning_rate': [0.1, 0.01],

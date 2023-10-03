@@ -74,4 +74,5 @@ class IntegerGroupFunctionRecoveryModel(nn.Module, MetadataBase):
 SUBJECT_MODELS = {
     "SimpleFunctionRecoveryModel": SimpleFunctionRecoveryModel,
     "IntegerGroupFunctionRecoveryModel": IntegerGroupFunctionRecoveryModel,
+    "ConvMNIST": ConvMNIST,
 }

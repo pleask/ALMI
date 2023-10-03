@@ -20,7 +20,7 @@ TRAIN = 'train'
 VAL = 'val'
 
 class Task(MetadataBase, ABC):
-    def __init__(self, seed=0.):
+    def __init__(self, seed=0., **_):
         """
         seed: The seed to use for randomly generating examples of this task.
         """
@@ -50,11 +50,6 @@ class Task(MetadataBase, ABC):
 
     def get_metadata(self):
         return super().get_metadata() | {'seed': self.seed}
-
-    @classmethod
-    @abstractmethod
-    def decode(cls, t):
-        pass
 
 
 class Example(MetadataBase, Dataset, ABC):
@@ -367,7 +362,7 @@ class TrojanMNISTTask(Task):
     def criterion(self, x, y):
         return nn.CrossEntropyLoss()(x, y)
 
-    def get_dataset(self, i, type=TRAIN):
+    def get_dataset(self, i, type=TRAIN, **_):
         transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5,), (0.5,))])
 
         dataset = torchvision.datasets.MNIST(root='./data', train=True, transform=transform, download=True)
@@ -446,7 +441,7 @@ class TrojanMNISTExample(Example):
         return {'trojan': self.trojan_image.detach().cpu().numpy().tolist()}
     
     def get_target(self):
-        return self.patch
+        return self.trojan_image
 
 
 SUBJECT = 'subject'
@@ -582,6 +577,6 @@ class IntegerGroupFunctionRecoveryExample(Example):
 TASKS = {
     'SymbolicFunctionRecoveryTask': SymbolicFunctionRecoveryTask,
     'SimpleFunctionRecoveryTask': SimpleFunctionRecoveryTask,
-    'AdversarialMNISTTask': TrojanMNISTTask,
+    'TrojanMNISTTask': TrojanMNISTTask,
     'IntegerGroupFunctionRecoveryTask': IntegerGroupFunctionRecoveryTask,
 }
