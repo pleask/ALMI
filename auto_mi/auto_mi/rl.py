@@ -46,18 +46,36 @@ class QLearner:
         max_next_Q = np.max(self.q_table[action, :])
         self.q_table[state, action] = self.q_table[state, action] + self.learning_rate * (reward + self.discount_factor * max_next_Q - self.q_table[state, action])
         
-        # TODO: Extract the logging from this function
-        plt.imshow(self.q_table, cmap='hot', interpolation='nearest')
-        plt.title('Q Table')
+        self.log_q_table()
+
+    def log_q_table(self):
+        # Visualization of the Q-table
+        fig, ax = plt.subplots(figsize=(16, 8))  # Adjust figure size here
+        cax = ax.imshow(self.q_table, cmap='hot', interpolation='nearest')
+        ax.set_title('Q Table')
+
+        # Adding labels to y-axis
+        y_labels = [str(self.state_space[i].get_metadata()) for i in range(len(self.state_space))]
+        ax.set_yticks(range(len(self.state_space)))
+        ax.set_yticklabels(y_labels) # Adjust rotation and fontsize here
+
+        # Optionally: Add a colorbar
+        cbar = fig.colorbar(cax, ax=ax, orientation='vertical')
+        cbar.set_label('Q Value', rotation=270, labelpad=15)
+
+        # Adjust subplot params to give labels more space
+        plt.subplots_adjust(left=0.25, bottom=0.15, right=0.95, top=0.95)
 
         # Save the plot to a file
         heatmap_file = 'q_table.png'
         plt.savefig(heatmap_file)
+        plt.close()  # Clear the plot to avoid overlay of the images
 
         # Log the heatmap image to wandb
         wandb.log({
             "q_table": wandb.Image(heatmap_file)
         })
+
 
     def get_optimal(self):
         best_state_idx = np.unravel_index(np.argmax(self.q_table), self.q_table.shape)[0]
