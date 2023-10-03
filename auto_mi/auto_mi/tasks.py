@@ -548,7 +548,7 @@ class IntegerGroupFunctionRecoveryExample(Example):
         ys = np.stack(binary_ys.ravel()).reshape(binary_ys.shape + (-1,))
 
 
-        return Xs, ys
+        return [torch.tensor(X) for X in Xs], [torch.tensor(y) for y in ys]
 
     def int_to_binary_array(self, n):
         num_digits = self.max_integer.bit_length()
