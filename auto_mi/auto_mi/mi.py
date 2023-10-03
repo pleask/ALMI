@@ -18,12 +18,12 @@ TRAIN_RATIO = 0.7
 INTERPRETABILITY_BATCH_SIZE = 2**8
 
 # TODO: Add wandb logging of the trained models
-def train_interpretability_model(model, task, subject_model_path, validation_subject_models, reuse_count=1000):
+def train_interpretability_model(model, task, subject_model_path, validation_subject_models, trainer, reuse_count=1000):
     device = model.device
 
     # Train the interpretability model on all the subject models that are not
     # going to be used for validation.
-    training_model_names = get_matching_subject_models_names(subject_model_path, task=task, exclude=validation_subject_models)
+    training_model_names = get_matching_subject_models_names(subject_model_path, trainer=trainer, task=task, exclude=validation_subject_models)
     # Use a subsample of the existing models at each RL step rather than constantly retraining the model on everything.
     training_model_names = random.sample(training_model_names, reuse_count)
     print(f'Using {len(training_model_names)} subject models')
@@ -65,8 +65,7 @@ def train_interpretability_model(model, task, subject_model_path, validation_sub
     return eval_loss / len(eval_dataloader)
 
 
-# TODO: Implement exclusion list
-def get_matching_subject_models_names(subject_model_dir, task=SimpleFunctionRecoveryTask, exclude=[]):
+def get_matching_subject_models_names(subject_model_dir, trainer, task=SimpleFunctionRecoveryTask, exclude=[]):
     matching_subject_models_names = []
 
     index_file_path = f'{subject_model_dir}/index.txt'
@@ -80,6 +79,17 @@ def get_matching_subject_models_names(subject_model_dir, task=SimpleFunctionReco
             if not os.path.exists(f'{subject_model_dir}/{metadata["id"]}.pickle'):
                 print(f'Model {metadata["id"]} does not exist')
                 continue
+
+            trainer_metadata = trainer.get_metadata()
+            if metadata['trainer']['name'] != trainer_metadata['name']:
+                continue
+            if metadata['trainer']['weight_decay'] != trainer_metadata['weight_decay']:
+                continue
+            if metadata['trainer']['lr'] != trainer_metadata['lr']:
+                continue
+            if metadata['trainer']['prune_amount'] != trainer_metadata['prune_amount']:
+                continue
+
             if metadata['id'] in exclude:
                 continue
             matching_subject_models_names.append(metadata['id'])
