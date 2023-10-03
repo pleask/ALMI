@@ -15,7 +15,7 @@ from auto_mi.base import MetadataBase
 from auto_mi.tasks import SimpleFunctionRecoveryTask
 
 TRAIN_RATIO = 0.
-INTERPRETABILITY_BATCH_SIZE = 2**8
+INTERPRETABILITY_BATCH_SIZE = 2**7
 
 # TODO: Add wandb logging of the trained models
 def train_interpretability_model(model, task, subject_model_path, validation_subject_models, trainer, reuse_count=1000):
