@@ -14,7 +14,7 @@ from auto_mi.models import SUBJECT_MODELS
 from auto_mi.base import MetadataBase
 from auto_mi.tasks import SimpleFunctionRecoveryTask
 
-TRAIN_RATIO = 0.7
+TRAIN_RATIO = 0.
 INTERPRETABILITY_BATCH_SIZE = 2**8
 
 # TODO: Add wandb logging of the trained models
