@@ -24,18 +24,19 @@ def train_interpretability_model(model, task, subject_model_path, validation_sub
     # Train the interpretability model on all the subject models that are not
     # going to be used for validation.
     training_model_names = get_matching_subject_models_names(subject_model_path, task=task, exclude=validation_subject_models)
+    # Use a subsample of the existing models at each RL step rather than constantly retraining the model on everything.
     training_model_names = random.sample(training_model_names, reuse_count)
     print(f'Using {len(training_model_names)} subject models')
 
     wandb.log({'subject_model_count': training_model_names})
     train_dataset = MultifunctionSubjectModelDataset(subject_model_path, training_model_names)
-    train_dataloader = DataLoader(train_dataset, batch_size=INTERPRETABILITY_BATCH_SIZE, shuffle=True, num_workers=24)
+    train_dataloader = DataLoader(train_dataset, batch_size=INTERPRETABILITY_BATCH_SIZE, shuffle=True, num_workers=0)
 
     # The performance of the interpretability model is evaluated on the
     # validation subject models, which were all created by the same trainer in
     # this step.
     eval_dataset = MultifunctionSubjectModelDataset(subject_model_path, validation_subject_models)
-    eval_dataloader = DataLoader(eval_dataset, batch_size=INTERPRETABILITY_BATCH_SIZE, shuffle=True, num_workers=24)
+    eval_dataloader = DataLoader(eval_dataset, batch_size=INTERPRETABILITY_BATCH_SIZE, shuffle=True, num_workers=0)
 
     # TODO: Take these as a parameter as will vary by task and model.
     optimizer = torch.optim.Adam(model.parameters(), lr=0.00001)
@@ -45,10 +46,10 @@ def train_interpretability_model(model, task, subject_model_path, validation_sub
     model.train()
     for epoch in tqdm(range(epochs), desc='Interpretability model epochs'):
         train_loss = 0.
-        for (inputs, targets) in train_dataloader:
+        for i, (inputs, targets) in enumerate(train_dataloader):
             optimizer.zero_grad()
-            outputs = model(inputs.to(device))
-            loss = criterion(outputs, targets.to(device))
+            outputs = model(inputs.to(device, non_blocking=True))
+            loss = criterion(outputs, targets.to(device, non_blocking=True))
             loss.backward()
             optimizer.step()
             train_loss += loss
@@ -127,7 +128,7 @@ class MultifunctionSubjectModelDataset(Dataset):
 
         x = torch.concat(
             [param.detach().reshape(-1) for _, param in model.named_parameters()]
-        ).to(self.device)
+        )
 
         del model
 
