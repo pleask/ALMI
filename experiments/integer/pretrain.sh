@@ -13,4 +13,10 @@ module load $PYTHON_BUILD_MODULES
 pip install /home/wclv88/bounding-mi-repo/auto_mi
 
 source /etc/profile
-stdbuf -oL python3 bounding-mi-repo/experiments/integer/pretrain.py
+
+# Check if SLURM_ARRAY_TASK_ID is 0 to execute a different script
+if [ "$SLURM_ARRAY_TASK_ID" -eq 0 ]; then
+    stdbuf -oL python3 bounding-mi-repo/tools/tar.py /nobackup/wclv88/bounding-mi-data/integer/subject-models /nobackup/wclv88/bounding-mi-data/integer/subject-models.tar
+else
+    stdbuf -oL python3 bounding-mi-repo/experiments/integer/pretrain.py
+fi

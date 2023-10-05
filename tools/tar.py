@@ -1,48 +1,52 @@
-import json
-import tarfile
 import os
-import sys
+import tarfile
+import time
+import argparse
+from watchdog.observers import Observer
+from watchdog.events import PatternMatchingEventHandler
 
-def create_tar_from_index(subject_model_path, tar_file_path):
-    index_file_path = f'{subject_model_path}/index.txt'
-    # Open the tar archive for writing
-    with tarfile.open(tar_file_path, 'w') as tar:
-        tar.add(index_file_path)
+def add_file_to_tar(tar_filename, file_to_add):
+    with tarfile.open(tar_filename, 'a') as tar:
+        tar.add(file_to_add, arcname=os.path.basename(file_to_add))
 
-        # Open the index file for reading
-        with open(index_file_path, 'r') as f:
-            # Iterate over each line in the index file
-            for i, line in enumerate(f):
-                print(f'Adding file {i}')
-                # Parse the line as a JSON object
-                data = json.loads(line)
+def create_archive_with_existing_files(archive_name, watch_dir):
+    with tarfile.open(archive_name, 'w') as tar:
+        for filename in os.listdir(watch_dir):
+            if filename.endswith('.pickle'):
+                tar.add(os.path.join(watch_dir, filename), arcname=filename)
 
-                # Extract the "id" field
-                file_id = data['id']
+class PickleHandler(PatternMatchingEventHandler):
+    patterns = ["*.pickle"]
 
-                if len(data['example']['operations']) != 2:
-                    continue
+    def process(self, event):
+        add_file_to_tar(args.archive_name, event.src_path)
 
-                # Construct the filename of the corresponding .pickle file
-                pickle_file_path = f"{subject_model_path}/{file_id}.pickle"
-
-                # Check if the file exists
-                if os.path.exists(pickle_file_path):
-                    # Add the .pickle file to the tar archive
-                    tar.add(pickle_file_path)
-                    os.remove(pickle_file_path)
-                else:
-                    print(f"Warning: File {pickle_file_path} not found!")
-
-    print(f"Archive {tar_file_path} created successfully!")
+    def on_created(self, event):
+        self.process(event)
 
 if __name__ == "__main__":
-    if len(sys.argv) != 3:
-        print("Usage: python script_name.py <index_file_path> <tar_file_path>")
-        sys.exit(1)
+    parser = argparse.ArgumentParser(description='Monitor a directory and add .pickle files to a tar archive.')
+    parser.add_argument('watch_dir', help='Directory to monitor')
+    parser.add_argument('archive_name', help='Name of the archive to add files to')
 
-    index_file_path = sys.argv[1]
-    tar_file_path = sys.argv[2]
+    args = parser.parse_args()
 
-    create_tar_from_index(index_file_path, tar_file_path)
+    # Ensure the watch directory exists
+    if not os.path.exists(args.watch_dir):
+        raise FileNotFoundError(f"The directory {args.watch_dir} does not exist!")
 
+    # Create archive with existing .pickle files
+    create_archive_with_existing_files(args.archive_name, args.watch_dir)
+
+    # setup observer
+    observer = Observer()
+    observer.schedule(PickleHandler(), path=args.watch_dir)
+
+    # start the observer
+    observer.start()
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        observer.stop()
+    observer.join()
