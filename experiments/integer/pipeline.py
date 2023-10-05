@@ -1,6 +1,7 @@
 """
 Implements the full meta-learning pipeline.
 """
+import argparse
 import os
 
 import torch
@@ -10,7 +11,7 @@ from auto_mi.tasks import IntegerGroupFunctionRecoveryTask
 from auto_mi.trainers import AdamTrainer
 from auto_mi.mi import Transformer
 from auto_mi.models import IntegerGroupFunctionRecoveryModel
-from auto_mi.rl import QLearner, train_optimiser_model
+from auto_mi.rl import QLearner, train_optimiser_model, pretrain_subject_models
 
 EPISODES = 100
 STEPS = 10
@@ -36,17 +37,26 @@ OPTIMISER_MODEL = QLearner(STATE_SPACE)
 sample_model = SUBJECT_MODEL(TASK)
 
 if __name__ == '__main__':
-    torch.multiprocessing.set_start_method('spawn')
-    subject_model_parameter_count = sum(p.numel() for p in sample_model.parameters())
-    print(f'Subject model parameter count: {subject_model_parameter_count}')
+    parser = argparse.ArgumentParser(description='Run either pretraining or the full pipeline.')
+    parser.add_argument("--pretrain", action="store_true", help="Pretrain models rather than running the full pipeline")
+    args = parser.parse_args()
 
-    interpretability_models = [Transformer(subject_model_parameter_count, TASK.mi_output_shape).to(DEVICE) for _ in STATE_SPACE]
+    if args.pretrain:
+        print('Pretraining subject models')
+        pretrain_subject_models(OPTIMISER_MODEL, SUBJECT_MODEL_PATH, SUBJECT_MODEL, TASK)
+    else:
+        print('Running RL pipeline')
+        torch.multiprocessing.set_start_method('spawn')
+        subject_model_parameter_count = sum(p.numel() for p in sample_model.parameters())
+        print(f'Subject model parameter count: {subject_model_parameter_count}')
 
-    # TODO: Use an evaluator structure instead of function on task
-    os.environ["WAND_API_KEY"] = "dd685d7aa9b38a2289e5784a961b81e22fc4c735"
-    wandb.init(project='bounding-mi', entity='patrickaaleask', reinit=True)
+        interpretability_models = [Transformer(subject_model_parameter_count, TASK.mi_output_shape).to(DEVICE) for _ in STATE_SPACE]
 
-    train_optimiser_model(OPTIMISER_MODEL, interpretability_models, SUBJECT_MODEL_PATH, SUBJECT_MODEL, TASK, EPISODES, STEPS, subject_models_per_step=SUBJECT_MODELS_PER_STEP)
+        # TODO: Use an evaluator structure instead of function on task
+        os.environ["WAND_API_KEY"] = "dd685d7aa9b38a2289e5784a961b81e22fc4c735"
+        wandb.init(project='bounding-mi', entity='patrickaaleask', reinit=True)
 
-    # Return the best hyperparameters
-    print(f"Optimal weight decay is {OPTIMISER_MODEL.get_optimal().weight_decay}, optimal lr is {OPTIMISER_MODEL.get_optimal().lr}")
+        train_optimiser_model(OPTIMISER_MODEL, interpretability_models, SUBJECT_MODEL_PATH, SUBJECT_MODEL, TASK, EPISODES, STEPS, subject_models_per_step=SUBJECT_MODELS_PER_STEP)
+
+        # Return the best hyperparameters
+        print(f"Optimal weight decay is {OPTIMISER_MODEL.get_optimal().weight_decay}, optimal lr is {OPTIMISER_MODEL.get_optimal().lr}")
