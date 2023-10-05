@@ -1,8 +1,11 @@
 import argparse
 import json
-import uuid
+import os
 from time import gmtime, strftime
+import uuid
 
+import filelock
+import tarfile
 import torch
 
 from auto_mi.tasks import VAL
@@ -57,22 +60,42 @@ def train_subject_models(task, model, trainer, subject_model_path, count=10, dev
     )
 
     model_ids = []
+    lock_file_path = f'{subject_model_path}/lock.file'
     for i, (net, target, loss) in enumerate(zip(nets, targets, losses)):
         net_id = uuid.uuid4()
         model_path = f'{subject_model_path}/{net_id}.pickle'
+        tar_file_path = f'{subject_model_path}/subject-models.tar'
+
+        # temporarily save the model to disk before we add it to the tar file
         torch.save(net.state_dict(), model_path)
-        md = {
-            'task': task.get_metadata(),
-            'example': task.get_dataset(i).get_metadata(),
-            'model': net.get_metadata(),
-            'trainer': trainer.get_metadata(),
-            "loss": loss,
-            "id": str(net_id),
-            "time": strftime("%Y-%m-%d %H:%M:%S", gmtime()),
-            "index": i,
-        }
-        with open(f'{subject_model_path}/index.txt', 'a') as md_file:
-            md_file.write(json.dumps(md) + '\n')
+        print('Acquiring tar lock')
+        lock = filelock.FileLock(lock_file_path)
+        with lock:
+            print(tar_file_path)
+            if not os.path.exists(tar_file_path):
+                # Create an empty tar file if it does not exist
+                with tarfile.open(tar_file_path, 'w'):
+                    pass
+
+            with tarfile.open(tar_file_path, 'a') as tar:
+                tar.add(model_path, arcname=f'{net_id}.pickle')
+
+            md = {
+                'task': task.get_metadata(),
+                'example': task.get_dataset(i).get_metadata(),
+                'model': net.get_metadata(),
+                'trainer': trainer.get_metadata(),
+                "loss": loss,
+                "id": str(net_id),
+                "time": strftime("%Y-%m-%d %H:%M:%S", gmtime()),
+                "index": i,
+            }
+            with lock, open(f'{subject_model_path}/index.txt', 'a') as md_file:
+                md_file.write(json.dumps(md) + '\n')
+
+            print(f'Saved model to {model_path}')
+
+        os.remove(model_path)
 
         model_ids.append(str(net_id))
     

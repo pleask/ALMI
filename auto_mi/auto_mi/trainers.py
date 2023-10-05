@@ -35,7 +35,6 @@ class AdamTrainer(BaseTrainer):
         training_data = DataLoader(example, batch_size=self.batch_size)
 
         for epoch in range(self.epochs):
-            # print(f'Epoch: {epoch}', flush=True)
             for inputs, labels in training_data:
                     optimizer.zero_grad()
                     inputs, labels = inputs.to(self.device), labels.to(self.device)
