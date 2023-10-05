@@ -9,17 +9,27 @@ def add_file_to_tar(tar_filename, file_to_add):
     with tarfile.open(tar_filename, 'a') as tar:
         tar.add(file_to_add, arcname=os.path.basename(file_to_add))
 
+def update_index_and_add_to_tar(tar_filename, watch_dir, pickle_filename):
+    with open(os.path.join(watch_dir, "index.txt"), "a") as index:
+        index.write(f"{pickle_filename}\n")
+    add_file_to_tar(tar_filename, os.path.join(watch_dir, "index.txt"))
+
 def create_archive_with_existing_files(archive_name, watch_dir):
     with tarfile.open(archive_name, 'w') as tar:
         for filename in os.listdir(watch_dir):
             if filename.endswith('.pickle'):
                 tar.add(os.path.join(watch_dir, filename), arcname=filename)
+        # Add index.txt if it exists
+        if "index.txt" in os.listdir(watch_dir):
+            tar.add(os.path.join(watch_dir, "index.txt"), arcname="index.txt")
 
 class PickleHandler(PatternMatchingEventHandler):
     patterns = ["*.pickle"]
 
     def process(self, event):
         add_file_to_tar(args.archive_name, event.src_path)
+        pickle_filename = os.path.basename(event.src_path)
+        update_index_and_add_to_tar(args.archive_name, args.watch_dir, pickle_filename)
 
     def on_created(self, event):
         self.process(event)

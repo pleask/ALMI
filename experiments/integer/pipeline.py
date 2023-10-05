@@ -22,7 +22,6 @@ INTERPRETABILITY_WEIGHT = 1.
 DEVICE = 'cuda'
 INTERPRETABILITY_BATCH_SIZE = 128
 INTERPRETABILITY_MODEL_EPOCHS = 5
-SUBJECT_MODEL_PATH = 'integer/subject_models'
 TASK = IntegerGroupFunctionRecoveryTask(2**1 - 1, 2)
 SUBJECT_MODEL = IntegerGroupFunctionRecoveryModel
 HYPERPARAMETERS = {
@@ -39,11 +38,12 @@ sample_model = SUBJECT_MODEL(TASK)
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Run either pretraining or the full pipeline.')
     parser.add_argument("--pretrain", action="store_true", help="Pretrain models rather than running the full pipeline")
+    parser.add_argument("--subject_model_path", type=str, help="Location of the subject models. If writing to this location (ie. when pretraining or running the RL pipeline with training new subject models) it must be a directory. If only reading from this location (ie. when running the pipeline without training new subject models), can be a tar archive.")
     args = parser.parse_args()
 
     if args.pretrain:
         print('Pretraining subject models')
-        pretrain_subject_models(OPTIMISER_MODEL, SUBJECT_MODEL_PATH, SUBJECT_MODEL, TASK)
+        pretrain_subject_models(OPTIMISER_MODEL, args.subject_model_path, SUBJECT_MODEL, TASK, batch_size=2000)
     else:
         print('Running RL pipeline')
         torch.multiprocessing.set_start_method('spawn')
@@ -56,7 +56,7 @@ if __name__ == '__main__':
         os.environ["WAND_API_KEY"] = "dd685d7aa9b38a2289e5784a961b81e22fc4c735"
         wandb.init(project='bounding-mi', entity='patrickaaleask', reinit=True)
 
-        train_optimiser_model(OPTIMISER_MODEL, interpretability_models, SUBJECT_MODEL_PATH, SUBJECT_MODEL, TASK, EPISODES, STEPS, subject_models_per_step=SUBJECT_MODELS_PER_STEP)
+        train_optimiser_model(OPTIMISER_MODEL, interpretability_models, args.subject_model_path, SUBJECT_MODEL, TASK, EPISODES, STEPS, subject_models_per_step=SUBJECT_MODELS_PER_STEP)
 
         # Return the best hyperparameters
         print(f"Optimal weight decay is {OPTIMISER_MODEL.get_optimal().weight_decay}, optimal lr is {OPTIMISER_MODEL.get_optimal().lr}")

@@ -83,9 +83,9 @@ class QLearner:
         return best_state
 
 
-def train_optimiser_model(optimiser_model, interpretability_models, subject_model_path, subject_model, task, episodes, steps, subject_models_per_step=10, interpretability_weight=0.5, train_subject_models=False):
+def train_optimiser_model(optimiser_model, interpretability_models, subject_model_path, subject_model, task, episodes, steps, subject_models_per_step=10, interpretability_weight=0.5, should_train_subject_models=False):
     """
-    train_subject_models: If set to True, train a new batch of subject models that are
+    should_train_subject_models: If set to True, train a new batch of subject models that are
     first used for validation. Otherwise, just use the first 1k subject models
     for the trainer for validation, and don't use them in training.
     """
@@ -103,7 +103,7 @@ def train_optimiser_model(optimiser_model, interpretability_models, subject_mode
             trainer = optimiser_model.state_space[action]
             interpretability_model = interpretability_models[action]
 
-            if train_subject_models:
+            if should_train_subject_models:
                 # Use the current trainer to train new subject models
                 subject_model_loss, validation_subject_models = train_subject_models(task, subject_model, trainer, subject_model_path, count=subject_models_per_step, device=interpretability_model.device)
             else:
