@@ -23,7 +23,7 @@ def train_interpretability_model(model, task, subject_model_path, validation_sub
 
     # Train the interpretability model on all the subject models that are not
     # going to be used for validation.
-    training_model_names = get_matching_subject_models_names(subject_model_path, trainer=trainer, task=task, exclude=validation_subject_models)
+    training_model_names, _ = get_matching_subject_models_names(subject_model_path, trainer=trainer, task=task, exclude=validation_subject_models)
     # Use a subsample of the existing models at each RL step rather than constantly retraining the model on everything.
     training_model_names = random.sample(training_model_names, reuse_count)
     print(f'Using {len(training_model_names)} subject models')
@@ -67,6 +67,7 @@ def train_interpretability_model(model, task, subject_model_path, validation_sub
 
 def get_matching_subject_models_names(subject_model_dir, trainer, task=SimpleFunctionRecoveryTask, exclude=[]):
     matching_subject_models_names = []
+    losses = []
 
     index_file_path = f'{subject_model_dir}/index.txt'
     with open(index_file_path, 'r') as index_file:
@@ -93,7 +94,8 @@ def get_matching_subject_models_names(subject_model_dir, trainer, task=SimpleFun
             if metadata['id'] in exclude:
                 continue
             matching_subject_models_names.append(metadata['id'])
-    return matching_subject_models_names
+            losses.append(metadata['id'])
+    return matching_subject_models_names, sum(losses) / len(losses)
 
 
 def get_subject_model(net, subject_model_dir, subject_model_name, device='cuda'):

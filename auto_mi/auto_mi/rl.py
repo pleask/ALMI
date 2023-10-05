@@ -6,7 +6,7 @@ import numpy as np
 import wandb
 
 from auto_mi.utils import train_subject_models
-from auto_mi.mi import train_interpretability_model
+from auto_mi.mi import train_interpretability_model, get_matching_subject_models_names
 
 
 class BaseQLearner(ABC):
@@ -83,7 +83,12 @@ class QLearner:
         return best_state
 
 
-def train_optimiser_model(optimiser_model, interpretability_models, subject_model_path, subject_model, task, episodes, steps, subject_models_per_step=10, interpretability_weight=0.5):
+def train_optimiser_model(optimiser_model, interpretability_models, subject_model_path, subject_model, task, episodes, steps, subject_models_per_step=10, interpretability_weight=0.5, train_subject_models=False):
+    """
+    train_subject_models: If set to True, train a new batch of subject models that are
+    first used for validation. Otherwise, just use the first 1k subject models
+    for the trainer for validation, and don't use them in training.
+    """
     reward_history = [[] for _ in range(len(optimiser_model.state_space))]
     subject_model_loss_history = [[] for _ in range(len(optimiser_model.state_space))]
     interpretability_model_loss_history = [[] for _ in range(len(optimiser_model.state_space))]
@@ -98,8 +103,13 @@ def train_optimiser_model(optimiser_model, interpretability_models, subject_mode
             trainer = optimiser_model.state_space[action]
             interpretability_model = interpretability_models[action]
 
-            # Use the current trainer to train new subject models
-            subject_model_loss, validation_subject_models = train_subject_models(task, subject_model, trainer, subject_model_path, count=subject_models_per_step, device=interpretability_model.device)
+            if train_subject_models:
+                # Use the current trainer to train new subject models
+                subject_model_loss, validation_subject_models = train_subject_models(task, subject_model, trainer, subject_model_path, count=subject_models_per_step, device=interpretability_model.device)
+            else:
+                # Use the first 1000 subject models in the dataset for validation
+                validation_subject_models, subject_model_loss = get_matching_subject_models_names(subject_model_path, trainer=trainer, task=task)
+                validation_subject_models = validation_subject_models[:1000]
 
             # Train the interpretability model using the new subject models and existing subject models
             interpretability_loss = train_interpretability_model(interpretability_model, task, subject_model_path, validation_subject_models, trainer)
