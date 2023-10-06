@@ -12,10 +12,11 @@ from auto_mi.trainers import AdamTrainer
 from auto_mi.mi import Transformer
 from auto_mi.models import IntegerGroupFunctionRecoveryModel
 from auto_mi.rl import QLearner, train_optimiser_model, pretrain_subject_models
+from auto_mi.utils import TarModelWriter
 
 EPISODES = 100
 STEPS = 10
-SUBJECT_MODEL_EPOCHS = 30
+SUBJECT_MODEL_EPOCHS = 1
 SUBJECT_MODELS_BATCH_SIZE = 2**10
 SUBJECT_MODELS_PER_STEP = 10
 INTERPRETABILITY_WEIGHT = 1.
@@ -25,8 +26,8 @@ INTERPRETABILITY_MODEL_EPOCHS = 5
 TASK = IntegerGroupFunctionRecoveryTask(2**1 - 1, 2)
 SUBJECT_MODEL = IntegerGroupFunctionRecoveryModel
 HYPERPARAMETERS = {
-    'weight_decay': [0, 0.1],
-    'learning_rate': [0.1, 0.01],
+    'weight_decay': [0, ], #0.1],
+    'learning_rate': [0.1, ], #0.01],
 }
 STATE_SPACE = [AdamTrainer(TASK, SUBJECT_MODEL_EPOCHS, SUBJECT_MODELS_BATCH_SIZE, weight_decay=wd, lr=lr, device=DEVICE) for wd in HYPERPARAMETERS['weight_decay'] for lr in HYPERPARAMETERS['learning_rate']]
 OPTIMISER_MODEL = QLearner(STATE_SPACE)
@@ -41,9 +42,11 @@ if __name__ == '__main__':
     parser.add_argument("--subject_model_path", type=str, help="Location of the subject models. If writing to this location (ie. when pretraining or running the RL pipeline with training new subject models) it must be a directory. If only reading from this location (ie. when running the pipeline without training new subject models), can be a tar archive.")
     args = parser.parse_args()
 
+    model_writer = TarModelWriter(args.subject_model_path)
+
     if args.pretrain:
         print('Pretraining subject models')
-        pretrain_subject_models(OPTIMISER_MODEL, args.subject_model_path, SUBJECT_MODEL, TASK, batch_size=2000)
+        pretrain_subject_models(OPTIMISER_MODEL, model_writer, SUBJECT_MODEL, TASK, batch_size=100)
     else:
         print('Running RL pipeline')
         torch.multiprocessing.set_start_method('spawn')
@@ -56,7 +59,7 @@ if __name__ == '__main__':
         os.environ["WAND_API_KEY"] = "dd685d7aa9b38a2289e5784a961b81e22fc4c735"
         wandb.init(project='bounding-mi', entity='patrickaaleask', reinit=True)
 
-        train_optimiser_model(OPTIMISER_MODEL, interpretability_models, args.subject_model_path, SUBJECT_MODEL, TASK, EPISODES, STEPS, subject_models_per_step=SUBJECT_MODELS_PER_STEP)
+        train_optimiser_model(OPTIMISER_MODEL, interpretability_models, model_writer, SUBJECT_MODEL, TASK, EPISODES, STEPS, subject_models_per_step=SUBJECT_MODELS_PER_STEP)
 
         # Return the best hyperparameters
         print(f"Optimal weight decay is {OPTIMISER_MODEL.get_optimal().weight_decay}, optimal lr is {OPTIMISER_MODEL.get_optimal().lr}")

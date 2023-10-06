@@ -67,99 +67,32 @@ def train_interpretability_model(model, task, subject_model_path, validation_sub
     return eval_loss / len(eval_dataloader)
 
 
-def get_matching_subject_models_names(subject_model_dir, trainer, task=None, exclude=None):
-    if exclude is None:
-        exclude = []
-    if task is None:
-        task = SimpleFunctionRecoveryTask
-        
+def get_matching_subject_models_names(model_writer, trainer, task=SimpleFunctionRecoveryTask, exclude=[]):
     matching_subject_models_names = []
     losses = []
-    
-    # Check if subject_model_dir is a tar archive
-    is_tar_archive = tarfile.is_tarfile(subject_model_dir)
+    metadata = model_writer.get_metadata()
 
-    if is_tar_archive:
-        with tarfile.open(subject_model_dir, 'r') as archive:
-            index_member = archive.getmember('index.txt')
-            with archive.extractfile(index_member) as index_file:
-                _process_index_file(index_file, subject_model_dir, task, trainer, matching_subject_models_names, losses, exclude, is_tar_archive)
-    else:
-        index_file_path = os.path.join(subject_model_dir, 'index.txt')
-        with open(index_file_path, 'r') as index_file:
-            _process_index_file(index_file, subject_model_dir, task, trainer, matching_subject_models_names, losses, exclude, is_tar_archive)
-    
-    return matching_subject_models_names, sum(losses) / len(losses) if losses else 0
-
-def _process_index_file(index_file, subject_model_dir, task, trainer, matching_subject_models_names, losses, exclude, is_tar_archive):
-    for line in index_file:
-        line = line.strip()
-        metadata = json.loads(line)
-
-        if metadata['task']['name'] != type(task).__name__:
-            continue
-        model_filename = f'{metadata["id"]}.pickle'
-        model_exists = _check_model_exists(subject_model_dir, model_filename, is_tar_archive)
-        if not model_exists:
-            print(f'Model {metadata["id"]} does not exist')
+    for md in metadata:
+        if md['task']['name'] != type(task).__name__:
             continue
 
         trainer_metadata = trainer.get_metadata()
-        if not all(metadata['trainer'][key] == trainer_metadata[key] for key in ['name', 'weight_decay', 'lr', 'prune_amount']):
+        if not all(md['trainer'][key] == trainer_metadata[key] for key in ['name', 'weight_decay', 'lr', 'prune_amount']):
             continue
 
-        if metadata['id'] in exclude:
+        if md['id'] in exclude:
             continue
 
-        matching_subject_models_names.append(metadata['id'])
-        losses.append(metadata['id'])
-
-def _check_model_exists(subject_model_dir, model_filename, is_tar_archive):
-    if is_tar_archive:
-        with tarfile.open(subject_model_dir, 'r') as archive:
-            try:
-                archive.getmember(model_filename)
-                return True
-            except KeyError:  # file not found in archive
-                return False
-    else:
-        return os.path.exists(os.path.join(subject_model_dir, model_filename))
-
-
-def get_subject_model(net, subject_model_dir, subject_model_name, device='cuda'):
-    model_filename = f"{subject_model_name}.pickle"
+        matching_subject_models_names.append(md['id'])
+        losses.append(md['loss'])
     
-    def load_model(file_path):
-        """Loads a model's state dict from a file."""
-        try:
-            load_args = (file_path,) if device == 'cuda' else (file_path, {'map_location': torch.device('cpu')})
-            net.load_state_dict(torch.load(*load_args))
-        except (OSError, EOFError, RuntimeError) as e:
-            raise Exception(f'Failed on {subject_model_name}: {e}') from e
-    
-    # Check if the subject_model_dir is a tar archive
-    if tarfile.is_tarfile(subject_model_dir):
-        # Use a temporary directory to extract our model file to.
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            with tarfile.open(subject_model_dir, 'r') as tar:
-                try:
-                    # Extract the specific model file from the tar archive.
-                    tar.extract(model_filename, path=tmp_dir)
-                except KeyError:
-                    raise Exception(f'{model_filename} not found in the tar archive.')
-                else:
-                    # Load the model from the extracted file.
-                    load_model(os.path.join(tmp_dir, model_filename))
-    else:  # If it's not a tar archive, proceed as in the original function
-        model_filepath = os.path.join(subject_model_dir, model_filename)
-        load_model(model_filepath)
-    
-    return net
+    return matching_subject_models_names, sum(losses) / len(losses) if losses else 0
+
 
 
 class MultifunctionSubjectModelDataset(Dataset):
-    def __init__(self, subject_model_dir, subject_model_ids, device='cpu'):
-        self._subject_model_dir = subject_model_dir
+    def __init__(self, model_loader, subject_model_ids, device='cpu'):
+        self._model_loader = model_loader
         self.subject_model_ids = subject_model_ids
         self.device = device
 
@@ -179,7 +112,7 @@ class MultifunctionSubjectModelDataset(Dataset):
         example = task.get_dataset(metadata['index'], purpose=MI)
         y = example.get_target()
 
-        model = get_subject_model(SUBJECT_MODELS[metadata['model']['name']](task), self._subject_model_dir, name)
+        model = self._model_loader.get_model(SUBJECT_MODELS[metadata['model']['name']](task), name)
 
         x = torch.concat(
             [param.detach().reshape(-1) for _, param in model.named_parameters()]
@@ -192,34 +125,10 @@ class MultifunctionSubjectModelDataset(Dataset):
         return x, y
 
     def _index_metadata(self):
-        def process_lines(file):
-            """Process lines from a file-like object and build metadata dictionary."""
-            local_metadata = {}
-            for line in file:
-                md = json.loads(line.strip().decode('utf-8') if isinstance(line, bytes) else line.strip())
-                local_metadata[md['id']] = md
-            return local_metadata
-        
-        metadata = {}
-        # Check if the subject_model_dir is a tar archive
-        if tarfile.is_tarfile(self._subject_model_dir):
-            # Open the tar file
-            with tarfile.open(self._subject_model_dir, 'r') as tar:
-                try:
-                    with tar.extractfile('index.txt') as index_file:
-                        metadata = process_lines(index_file)
-                except KeyError:
-                    print("index.txt not found in the tar archive.")
-        # If it's not a tar archive, then proceed as before
-        else:
-            index_path = os.path.join(self._subject_model_dir, 'index.txt')
-            if os.path.exists(index_path):
-                with open(index_path, 'r') as f:
-                    metadata = process_lines(f)
-            else:
-                print("index.txt not found in the directory.")
-        
-        return metadata
+        d = {}
+        for md in self._model_loader.get_metadata():
+            d[md['id']] = md
+        return d
 
     @property
     def model_param_count(self):
