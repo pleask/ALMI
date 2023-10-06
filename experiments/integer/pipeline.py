@@ -20,7 +20,7 @@ SUBJECT_MODEL_EPOCHS = 1
 SUBJECT_MODELS_BATCH_SIZE = 2**10
 SUBJECT_MODELS_PER_STEP = 10
 INTERPRETABILITY_WEIGHT = 1.
-DEVICE = 'cuda'
+DEVICE = 'cpu'
 INTERPRETABILITY_BATCH_SIZE = 128
 INTERPRETABILITY_MODEL_EPOCHS = 5
 TASK = IntegerGroupFunctionRecoveryTask(2**1 - 1, 2)
@@ -28,6 +28,8 @@ SUBJECT_MODEL = IntegerGroupFunctionRecoveryModel
 HYPERPARAMETERS = {
     'weight_decay': [0, ], #0.1],
     'learning_rate': [0.1, ], #0.01],
+    'weight_decay': [0, 0.001, 0.01, 0.1],
+    'learning_rate': [0.1, 0.01, 0.001, 0.0001],
 }
 STATE_SPACE = [AdamTrainer(TASK, SUBJECT_MODEL_EPOCHS, SUBJECT_MODELS_BATCH_SIZE, weight_decay=wd, lr=lr, device=DEVICE) for wd in HYPERPARAMETERS['weight_decay'] for lr in HYPERPARAMETERS['learning_rate']]
 OPTIMISER_MODEL = QLearner(STATE_SPACE)
@@ -46,7 +48,7 @@ if __name__ == '__main__':
 
     if args.pretrain:
         print('Pretraining subject models')
-        pretrain_subject_models(OPTIMISER_MODEL, model_writer, SUBJECT_MODEL, TASK, batch_size=100)
+        pretrain_subject_models(OPTIMISER_MODEL, args.subject_model_path, SUBJECT_MODEL, TASK, batch_size=5)
     else:
         print('Running RL pipeline')
         torch.multiprocessing.set_start_method('spawn')

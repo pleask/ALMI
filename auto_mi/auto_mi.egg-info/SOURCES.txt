@@ -3,6 +3,7 @@ auto_mi/__init__.py
 auto_mi/base.py
 auto_mi/mi.py
 auto_mi/models.py
+auto_mi/rl.py
 auto_mi/tasks.py
 auto_mi/trainers.py
 auto_mi/utils.py
