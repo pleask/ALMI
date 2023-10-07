@@ -111,7 +111,7 @@ class TarModelWriter(ModelWriter):
     def get_model(self, model, model_id, device='cpu'):
         tar_archive_path = f'{self.dir}/{model_id[:2]}.tar'
         model_filename = f'{model_id}.pickle'
-i
+
         with tempfile.TemporaryDirectory() as tmp_dir:
             with tarfile.open(tar_archive_path, 'r') as tar:
                 tar.extract(model_filename, path=tmp_dir)
