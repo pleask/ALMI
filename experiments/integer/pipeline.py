@@ -48,7 +48,7 @@ if __name__ == '__main__':
 
     if args.pretrain:
         print('Pretraining subject models')
-        pretrain_subject_models(OPTIMISER_MODEL, args.subject_model_path, SUBJECT_MODEL, TASK, batch_size=5)
+        pretrain_subject_models(OPTIMISER_MODEL, model_writer, SUBJECT_MODEL, TASK, batch_size=5)
     else:
         print('Running RL pipeline')
         torch.multiprocessing.set_start_method('spawn')

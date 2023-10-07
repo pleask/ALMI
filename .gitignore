@@ -3,6 +3,7 @@ __pycache__/
 *.out
 *.pickle
 subject_models/
+subject-models/
 mi_models/
 mi_models_out/
 myenv/
