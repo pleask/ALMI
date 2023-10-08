@@ -64,7 +64,7 @@ def train_interpretability_model(model, task, subject_model_path, validation_sub
             loss = criterion(outputs, targets.to(device))
             eval_loss += loss.item()
     
-    return eval_loss / len(eval_dataloader)
+    return eval_loss / len(eval_dataloader), train_loss / len(train_dataloader)
 
 
 def get_matching_subject_models_names(model_writer, trainer, task=SimpleFunctionRecoveryTask, exclude=[]):

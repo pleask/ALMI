@@ -92,6 +92,7 @@ def train_optimiser_model(optimiser_model, interpretability_models, model_writer
     reward_history = [[] for _ in range(len(optimiser_model.state_space))]
     subject_model_loss_history = [[] for _ in range(len(optimiser_model.state_space))]
     interpretability_model_loss_history = [[] for _ in range(len(optimiser_model.state_space))]
+    interpretability_training_loss_history = [[] for _ in range(len(optimiser_model.state_space))]
 
     for episode in range(episodes):
         print(f'Episode {episode} of {episodes}')
@@ -112,7 +113,7 @@ def train_optimiser_model(optimiser_model, interpretability_models, model_writer
                 validation_subject_models = validation_subject_models[:1000]
 
             # Train the interpretability model using the new subject models and existing subject models
-            interpretability_loss = train_interpretability_model(interpretability_model, task, model_writer, validation_subject_models, trainer)
+            interpretability_loss, interpretability_training_loss = train_interpretability_model(interpretability_model, task, model_writer, validation_subject_models, trainer)
 
             reward = -(interpretability_weight * interpretability_loss + (1 - interpretability_weight) * subject_model_loss)
             optimiser_model.update(state, action, reward)
@@ -122,6 +123,7 @@ def train_optimiser_model(optimiser_model, interpretability_models, model_writer
             reward_history[state].append(reward)
             subject_model_loss_history[state].append(subject_model_loss)
             interpretability_model_loss_history[state].append(interpretability_loss)
+            interpretability_training_loss_history[state].append(interpretability_training_loss)
 
             wandb.log({
                 "reward" : wandb.plot.line_series(
@@ -143,6 +145,13 @@ def train_optimiser_model(optimiser_model, interpretability_models, model_writer
                     ys=interpretability_model_loss_history,
                     keys=[str(trainer.get_metadata()) for trainer in optimiser_model.state_space],
                     title="Interpretability Model Loss",
+                    xname='Step',
+                ),
+                "interpretability_training_loss" : wandb.plot.line_series(
+                    xs=list(range(max([len(rw) for rw in interpretability_training_loss_history]))), 
+                    ys=interpretability_training_loss_history,
+                    keys=[str(trainer.get_metadata()) for trainer in optimiser_model.state_space],
+                    title="Interpretability Training Loss",
                     xname='Step',
                 ),
             })
