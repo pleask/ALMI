@@ -16,7 +16,7 @@ from auto_mi.utils import TarModelWriter
 
 EPISODES = 100
 STEPS = 10
-SUBJECT_MODEL_EPOCHS = 30
+SUBJECT_MODEL_EPOCHS = 100
 SUBJECT_MODELS_BATCH_SIZE = 2**10
 SUBJECT_MODELS_PER_STEP = 10
 INTERPRETABILITY_WEIGHT = 1.
@@ -47,7 +47,8 @@ if __name__ == '__main__':
 
     if args.pretrain:
         print('Pretraining subject models')
-        pretrain_subject_models(OPTIMISER_MODEL, model_writer, SUBJECT_MODEL, TASK, batch_size=5)
+        optimiser_model = OPTIMISER_MODEL(STATE_SPACE)
+        pretrain_subject_models(optimiser_model, model_writer, SUBJECT_MODEL, TASK, batch_size=5)
     else:
         print('Running RL pipeline')
         torch.multiprocessing.set_start_method('spawn')

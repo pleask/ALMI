@@ -470,8 +470,8 @@ class IntegerGroupFunctionRecoveryTask(Task):
     operations = [
         (0, '+'),
         (1, '-'),
-        # (2, '//'),
-        # (3, '%'),
+        (2, '//'),
+        (3, '%'),
     ]
 
     def __init__(self, max_integer=2**3-1, input_count=6, seed=0., **_):
