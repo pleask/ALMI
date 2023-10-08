@@ -110,14 +110,9 @@ class TarModelWriter(ModelWriter):
 
     def get_model(self, model, model_id, device='cpu'):
         model_filename = f'{model_id}.pickle'
-        extracted_model_path = os.path.join(self.dir, model_filename)
+        model_path = os.path.join(self.dir, model_filename)
 
-        if not os.path.exists(extracted_model_path):
-                tar_archive_path = os.path.join(self.dir, f'{model_id[:2]}.tar')
-                with tarfile.open(tar_archive_path, 'r') as tar:
-                    tar.extract(model_filename, path=self.dir)
-
-        load_args = (extracted_model_path,) if device == 'cuda' else (extracted_model_path, {'map_location': torch.device('cpu')})
+        load_args = (model_path,) if device == 'cuda' else (model_path, {'map_location': torch.device('cpu')})
         model.load_state_dict(torch.load(*load_args))
 
         return model
