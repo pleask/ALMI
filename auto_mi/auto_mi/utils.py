@@ -109,17 +109,23 @@ class TarModelWriter(ModelWriter):
             return metadata
 
     def get_model(self, model, model_id, device='cpu'):
-        tar_archive_path = f'{self.dir}/{model_id[:2]}.tar'
+        tar_archive_path = os.path.join(self.dir, f'{model_id[:2]}.tar')
         model_filename = f'{model_id}.pickle'
+        extracted_model_path = os.path.join(self.dir, model_filename)
 
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            with tarfile.open(tar_archive_path, 'r') as tar:
-                tar.extract(model_filename, path=tmp_dir)
-                file_path = os.path.join(tmp_dir, model_filename)
-                load_args = (file_path,) if device == 'cuda' else (file_path, {'map_location': torch.device('cpu')})
-                model.load_state_dict(torch.load(*load_args))
+        if not os.path.exists(extracted_model_path):  # Check if the model is already extracted
+            with tempfile.TemporaryDirectory() as tmp_dir:
+                with tarfile.open(tar_archive_path, 'r') as tar:
+                    tar.extract(model_filename, path=tmp_dir)
+                    # Move the extracted file to self.dir instead of loading it directly to memory
+                    os.rename(os.path.join(tmp_dir, model_filename), extracted_model_path)
+
+        # Load model
+        load_args = (extracted_model_path,) if device == 'cuda' else (extracted_model_path, {'map_location': torch.device('cpu')})
+        model.load_state_dict(torch.load(*load_args))
 
         return model
+
 
 
 def train_subject_models(task, model, trainer, model_writer, count=10, device='cpu'):
