@@ -43,7 +43,7 @@ def train_interpretability_model(model, task, subject_model_path, validation_sub
     # TODO: Take these as a parameter as will vary by task and model.
     optimizer = torch.optim.Adam(model.parameters(), lr=0.00001)
     criterion = nn.MSELoss()
-    epochs = 30
+    epochs = 5
 
     model.train()
     for epoch in tqdm(range(epochs), desc='Interpretability model epochs'):

@@ -72,6 +72,7 @@ class TarModelWriter(ModelWriter):
         super().__init__(dir)
         self._index_path = f'{dir}/index.txt'
         self._index_lock = f'{dir}/index.lock'
+        self._metadata = None
 
     def write_metadata(self, md):
         print('Acquiring lock to write metadata')
@@ -101,11 +102,15 @@ class TarModelWriter(ModelWriter):
         os.remove(tmp_model_path)
 
     def get_metadata(self):
+        if self._metadata is not None:
+            return self._metadata
+
         with open(self._index_path, 'r') as file:
             metadata = []
             for line in file:
                 md = json.loads(line.strip().decode('utf-8') if isinstance(line, bytes) else line.strip())
                 metadata.append(md)
+            self._metadata = metadata
             return metadata
 
     def get_model(self, model, model_id, device='cpu'):

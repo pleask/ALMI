@@ -109,7 +109,7 @@ def train_optimiser_model(optimiser_model, interpretability_models, model_writer
             else:
                 # Use the first 1000 subject models in the dataset for validation
                 validation_subject_models, subject_model_loss = get_matching_subject_models_names(model_writer, trainer=trainer, task=task)
-                validation_subject_models = validation_subject_models[:10]
+                validation_subject_models = validation_subject_models[:1000]
 
             # Train the interpretability model using the new subject models and existing subject models
             interpretability_loss = train_interpretability_model(interpretability_model, task, model_writer, validation_subject_models, trainer)
