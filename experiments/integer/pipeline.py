@@ -9,7 +9,7 @@ import wandb
 
 from auto_mi.tasks import IntegerGroupFunctionRecoveryTask
 from auto_mi.trainers import AdamTrainer
-from auto_mi.mi import Transformer
+from auto_mi.mi import Transformer, FeedForwardNN
 from auto_mi.models import IntegerGroupFunctionRecoveryModel
 from auto_mi.rl import QLearner, train_optimiser_model, pretrain_subject_models
 from auto_mi.utils import TarModelWriter
@@ -63,7 +63,7 @@ if __name__ == '__main__':
 
         optimiser_model = OPTIMISER_MODEL(state_space)
 
-        interpretability_models = [Transformer(subject_model_parameter_count, TASK.mi_output_shape).to(DEVICE) for _ in state_space]
+        interpretability_models = [FeedForwardNN(subject_model_parameter_count, TASK.mi_output_shape).to(DEVICE) for _ in state_space]
 
         # TODO: Use an evaluator structure instead of function on task
         os.environ["WAND_API_KEY"] = "dd685d7aa9b38a2289e5784a961b81e22fc4c735"
