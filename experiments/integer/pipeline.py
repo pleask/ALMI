@@ -16,14 +16,14 @@ from auto_mi.utils import TarModelWriter
 
 EPISODES = 100
 STEPS = 10
-SUBJECT_MODEL_EPOCHS = 100
+SUBJECT_MODEL_EPOCHS = 300
 SUBJECT_MODELS_BATCH_SIZE = 2**10
 SUBJECT_MODELS_PER_STEP = 10
 INTERPRETABILITY_WEIGHT = 1.
 DEVICE = 'cpu'
-INTERPRETABILITY_BATCH_SIZE = 128
-INTERPRETABILITY_MODEL_EPOCHS = 5
-TASK = IntegerGroupFunctionRecoveryTask(2**1 - 1, 2)
+INTERPRETABILITY_BATCH_SIZE = 1024
+INTERPRETABILITY_MODEL_EPOCHS = 30
+TASK = IntegerGroupFunctionRecoveryTask(2**4 - 1, 2)
 SUBJECT_MODEL = IntegerGroupFunctionRecoveryModel
 HYPERPARAMETERS = {
     'weight_decay': [0, 0.001, 0.01, 0.1],
@@ -64,7 +64,7 @@ if __name__ == '__main__':
         optimiser_model = OPTIMISER_MODEL(state_space)
 
         print(subject_model_parameter_count, TASK.mi_output_shape)
-        interpretability_models = [FeedForwardNN(subject_model_parameter_count, TASK.mi_output_shape[1]).to(DEVICE) for _ in state_space]
+        interpretability_models = [Transformer(subject_model_parameter_count, TASK.mi_output_shape).to(DEVICE) for _ in state_space]
 
         # TODO: Use an evaluator structure instead of function on task
         os.environ["WAND_API_KEY"] = "dd685d7aa9b38a2289e5784a961b81e22fc4c735"

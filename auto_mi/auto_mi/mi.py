@@ -41,7 +41,7 @@ def train_interpretability_model(model, task, subject_model_path, validation_sub
     eval_dataloader = DataLoader(eval_dataset, batch_size=INTERPRETABILITY_BATCH_SIZE, shuffle=True, num_workers=0)
 
     # TODO: Take these as a parameter as will vary by task and model.
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.00001)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.00001, weight_decay=0.001)
     criterion = nn.MSELoss()
     epochs = 5
 
