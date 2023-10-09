@@ -217,6 +217,10 @@ class FeedForwardNN(nn.Module, MetadataBase):
         x = torch.cat([function_encoding, x[:, -1:]], dim=-1)
         return x
 
+    @property
+    def device(self):
+        return self.fc1.weight.device
+
 
 class SimpleFunctionRecoveryModel(nn.Module, MetadataBase):
     def __init__(self, in_size, out_shape, layer_scale=1):

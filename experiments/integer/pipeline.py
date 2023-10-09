@@ -63,7 +63,8 @@ if __name__ == '__main__':
 
         optimiser_model = OPTIMISER_MODEL(state_space)
 
-        interpretability_models = [FeedForwardNN(subject_model_parameter_count, TASK.mi_output_shape).to(DEVICE) for _ in state_space]
+        print(subject_model_parameter_count, TASK.mi_output_shape)
+        interpretability_models = [FeedForwardNN(subject_model_parameter_count, TASK.mi_output_shape[1]).to(DEVICE) for _ in state_space]
 
         # TODO: Use an evaluator structure instead of function on task
         os.environ["WAND_API_KEY"] = "dd685d7aa9b38a2289e5784a961b81e22fc4c735"
