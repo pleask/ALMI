@@ -480,7 +480,7 @@ class IntegerGroupFunctionRecoveryTask(Task):
         self.input_count = input_count
 
     def criterion(self, output, target):
-        value_loss = nn.MSELoss()(to_int(output), to_int(target))
+        value_loss = nn.MSELoss()(output, target)
         return value_loss
 
     def get_dataset(self, i, type=TRAIN, purpose=SUBJECT):
@@ -546,7 +546,6 @@ class IntegerGroupFunctionRecoveryExample(Example):
 
         binary_ys = vectorized_func(int_ys)
         ys = np.stack(binary_ys.ravel()).reshape(binary_ys.shape + (-1,))
-
 
         return [torch.tensor(X) for X in Xs], [torch.tensor(y) for y in ys]
 

@@ -16,14 +16,14 @@ from auto_mi.utils import TarModelWriter, DirModelWriter
 
 EPISODES = 100
 STEPS = 10
-SUBJECT_MODEL_EPOCHS = 300
+SUBJECT_MODEL_EPOCHS = 100
 SUBJECT_MODELS_BATCH_SIZE = 2**10
 SUBJECT_MODELS_PER_STEP = 10
 INTERPRETABILITY_WEIGHT = 1.
 DEVICE = 'cpu'
 INTERPRETABILITY_BATCH_SIZE = 1024
 INTERPRETABILITY_MODEL_EPOCHS = 30
-TASK = IntegerGroupFunctionRecoveryTask(2**4 - 1, 2)
+TASK = IntegerGroupFunctionRecoveryTask(2**4 - 1, 5)
 SUBJECT_MODEL = IntegerGroupFunctionRecoveryModel
 HYPERPARAMETERS = {
     'weight_decay': [0, 0.001, 0.01, 0.1],
@@ -43,8 +43,11 @@ if __name__ == '__main__':
     parser.add_argument("--pretrain", action="store_true", help="Pretrain models rather than running the full pipeline")
     parser.add_argument("--array_number", type=int, default=-1, help="Test a single hyperparameter combination rather than running the full pipeline. This facilitates parallelisation.")
     parser.add_argument("--subject_model_path", type=str, required=True, help="Location of the subject models. If writing to this location (ie. when pretraining or running the RL pipeline with training new subject models) it must be a directory. If only reading from this location (ie. when running the pipeline without training new subject models), can be a tar archive.")
-    parser.add_argument("--interpretability_model_path", required=True, type=str, help="Location to save the interpretability models.")
+    parser.add_argument("--interpretability_model_path", type=str, help="Location to save the interpretability models.")
     args = parser.parse_args()
+
+    if not args.pretrain:
+        assert args.interpretability_model_path
 
     subject_model_io = TarModelWriter(args.subject_model_path)
     interpretability_model_io = DirModelWriter(args.interpretability_model_path)
