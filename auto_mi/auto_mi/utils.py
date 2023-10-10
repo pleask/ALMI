@@ -67,8 +67,11 @@ class ModelWriter(ABC):
         pass
 
 
-class TarModelWriter(ModelWriter):
-    def __init__(self, dir: str):
+class ConcurrentMetadataWriter(ModelWriter):
+    """
+    Implements concurrent metadata management for an index file using a lock file.
+    """
+    def __init__(self, dir):
         super().__init__(dir)
         self._index_path = f'{dir}/index.txt'
         self._index_lock = f'{dir}/index.lock'
@@ -80,6 +83,48 @@ class TarModelWriter(ModelWriter):
         with lock, open(self._index_path, 'a') as md_file:
             md_file.write(json.dumps(md) + '\n')
 
+    def get_metadata(self):
+        if self._metadata is not None:
+            return self._metadata
+
+        with open(self._index_path, 'r') as file:
+            metadata = []
+            for line in file:
+                md = json.loads(line.strip().decode('utf-8') if isinstance(line, bytes) else line.strip())
+                metadata.append(md)
+            self._metadata = metadata
+            return metadata
+
+
+class DirModelWriter(ConcurrentMetadataWriter):
+    """
+    Write the models to a flat hierarchy in a directory. Don't use when
+    operating on more than 100k subject models if you want to tar the models, as
+    this will take hours.
+
+    It's assumed that only a single process will be writing to any model, and
+    multiple processes will write to the index file.
+    """
+    def get_model(self, model, model_id, device='cpu'):
+        model_filename = f'{model_id}.pickle'
+        model_path = os.path.join(self.dir, model_filename)
+
+        load_args = (model_path,) if device == 'cuda' else (model_path, {'map_location': torch.device('cpu')})
+        model.load_state_dict(torch.load(*load_args))
+
+        return model
+
+    def write_model(self, model_id, model):
+        model_path = os.path.join(self.dir, f'{model_id}.pickle')
+        torch.save(model.state_dict(), model_path)
+
+
+class TarModelWriter(DirModelWriter):
+    """
+    Writes the models to one of 256 tar archives based on their ID to avoid
+    write contention. Reads from a regular directory though, as untarring as a
+    pre-processing step is considerably faster on the NCC.
+    """
     def write_model(self, model_id, model):
         tmp_model_path = f'{self.dir}/{model_id}.pickle'
         lock_file_path = f'{self.dir}/{model_id[:2]}.lock'
@@ -100,28 +145,6 @@ class TarModelWriter(ModelWriter):
                 tar.add(tmp_model_path, arcname=f'{model_id}.pickle')
 
         os.remove(tmp_model_path)
-
-    def get_metadata(self):
-        if self._metadata is not None:
-            return self._metadata
-
-        with open(self._index_path, 'r') as file:
-            metadata = []
-            for line in file:
-                md = json.loads(line.strip().decode('utf-8') if isinstance(line, bytes) else line.strip())
-                metadata.append(md)
-            self._metadata = metadata
-            return metadata
-
-    def get_model(self, model, model_id, device='cpu'):
-        model_filename = f'{model_id}.pickle'
-        model_path = os.path.join(self.dir, model_filename)
-
-        load_args = (model_path,) if device == 'cuda' else (model_path, {'map_location': torch.device('cpu')})
-        model.load_state_dict(torch.load(*load_args))
-
-        return model
-
 
 
 def train_subject_models(task, model, trainer, model_writer, count=10, device='cpu'):

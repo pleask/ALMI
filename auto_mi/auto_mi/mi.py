@@ -20,7 +20,7 @@ TRAIN_RATIO = 0.
 INTERPRETABILITY_BATCH_SIZE = 2**7
 
 # TODO: Add wandb logging of the trained models
-def train_interpretability_model(model, task, subject_model_path, validation_subject_models, trainer, reuse_count=1000):
+def train_interpretability_model(model, task, subject_model_path, validation_subject_models, trainer, interpretabilty_model_io, reuse_count=1000):
     device = model.device
 
     # Train the interpretability model on all the subject models that are not
@@ -55,6 +55,8 @@ def train_interpretability_model(model, task, subject_model_path, validation_sub
             loss.backward()
             optimizer.step()
             train_loss += loss
+
+    interpretabilty_model_io.write_model(f'{trainer.get_metadata()}', model)
 
     model.eval()
     with torch.no_grad():

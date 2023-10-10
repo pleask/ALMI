@@ -83,7 +83,7 @@ class QLearner:
         return best_state
 
 
-def train_optimiser_model(optimiser_model, interpretability_models, model_writer, subject_model, task, episodes, steps, subject_models_per_step=10, interpretability_weight=0.5, should_train_subject_models=False):
+def train_optimiser_model(optimiser_model, interpretability_models, interpretabilty_model_io, subject_model_io, subject_model, task, episodes, steps, subject_models_per_step=10, interpretability_weight=0.5, should_train_subject_models=False):
     """
     should_train_subject_models: If set to True, train a new batch of subject models that are
     first used for validation. Otherwise, just use the first 1k subject models
@@ -106,14 +106,14 @@ def train_optimiser_model(optimiser_model, interpretability_models, model_writer
 
             if should_train_subject_models:
                 # Use the current trainer to train new subject models
-                subject_model_loss, validation_subject_models = train_subject_models(task, subject_model, trainer, model_writer, count=subject_models_per_step, device=interpretability_model.device)
+                subject_model_loss, validation_subject_models = train_subject_models(task, subject_model, trainer, subject_model_io, count=subject_models_per_step, device=interpretability_model.device)
             else:
                 # Use the first 1000 subject models in the dataset for validation
-                validation_subject_models, subject_model_loss = get_matching_subject_models_names(model_writer, trainer=trainer, task=task)
-                validation_subject_models = validation_subject_models[:1000]
+                validation_subject_models, subject_model_loss = get_matching_subject_models_names(subject_model_io, trainer=trainer, task=task)
+                validation_subject_models = validation_subject_models[:10]
 
             # Train the interpretability model using the new subject models and existing subject models
-            interpretability_loss, interpretability_training_loss = train_interpretability_model(interpretability_model, task, model_writer, validation_subject_models, trainer)
+            interpretability_loss, interpretability_training_loss = train_interpretability_model(interpretability_model, task, subject_model_io, validation_subject_models, trainer, interpretabilty_model_io)
 
             reward = -(interpretability_weight * interpretability_loss + (1 - interpretability_weight) * subject_model_loss)
             optimiser_model.update(state, action, reward)
