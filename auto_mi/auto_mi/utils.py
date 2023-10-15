@@ -66,6 +66,10 @@ class ModelWriter(ABC):
     def get_model(self, empty_model, id, device='cpu'):
         pass
 
+    @abstractmethod
+    def check_model_exists(self, id):
+        pass
+
 
 class ConcurrentMetadataWriter(ModelWriter):
     """
@@ -117,6 +121,10 @@ class DirModelWriter(ConcurrentMetadataWriter):
     def write_model(self, model_id, model):
         model_path = os.path.join(self.dir, f'{model_id}.pickle')
         torch.save(model.state_dict(), model_path)
+
+    def check_model_exists(self, model_id):
+        model_path = os.path.join(self.dir, f'{model_id}.pickle')
+        return os.path.exists(model_path)
 
 
 class TarModelWriter(DirModelWriter):

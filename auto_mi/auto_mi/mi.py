@@ -85,6 +85,11 @@ def get_matching_subject_models_names(model_writer, trainer, task=SimpleFunction
         if md['id'] in exclude:
             continue
 
+        # Have had a few issues where model pickles aren't saved but their
+        # metadata is still written, so skip those models.
+        if not model_writer.check_model_exists(md['id']):
+            continue
+
         matching_subject_models_names.append(md['id'])
         losses.append(md['loss'])
     
