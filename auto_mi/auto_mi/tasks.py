@@ -20,11 +20,12 @@ TRAIN = 'train'
 VAL = 'val'
 
 class Task(MetadataBase, ABC):
-    def __init__(self, seed=0., **_):
+    def __init__(self, seed=0., train=True, **_):
         """
         seed: The seed to use for randomly generating examples of this task.
         """
         self.seed = seed
+        self.train = train
 
     @abstractmethod
     def get_dataset(self, i, type=TRAIN) -> Dataset:
