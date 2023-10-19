@@ -157,11 +157,10 @@ def train_optimiser_model(optimiser_model, interpretability_models, interpretabi
             })
 
 
-def pretrain_subject_models(optimiser_model, model_writer, subject_model, task, batch_size=10):
+def pretrain_subject_models(trainer, model_writer, subject_model, task, batch_size=10):
     """
     Trains random samples of subject models. This is so the dataset generation
     can happen in a highly distributed manner (ie. ~2k CPUs) on Hamilton, rather
     than as part of the pipeline process, which can only access ~64 CPUs.
     """
-    trainer = random.choice(optimiser_model.state_space)
     train_subject_models(task, subject_model, trainer, model_writer, count=batch_size)

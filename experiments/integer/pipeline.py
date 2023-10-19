@@ -3,6 +3,7 @@ Implements the full meta-learning pipeline.
 """
 import argparse
 import os
+import random
 
 import torch
 import wandb
@@ -55,7 +56,8 @@ if __name__ == '__main__':
     if args.pretrain:
         print('Pretraining subject models')
         optimiser_model = OPTIMISER_MODEL(STATE_SPACE)
-        pretrain_subject_models(optimiser_model, subject_model_io, SUBJECT_MODEL, TASK, batch_size=5)
+        trainer = random.choice(optimiser_model.state_space)
+        pretrain_subject_models(trainer, subject_model_io, SUBJECT_MODEL, TASK, batch_size=5)
     else:
         print('Running RL pipeline')
         torch.multiprocessing.set_start_method('spawn')
