@@ -124,9 +124,10 @@ def evaluate(task, subject_model_io):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Run either pretraining or the full pipeline.')
     parser.add_argument("--evaluate_subject_model", action='store_true', help="Evaluate a subject model.")
+    parser.add_argument("--seed", type=float, help="Random seed.", default=0.)
     args = parser.parse_args()
 
-    task = PermutedMNISTTask(0)
+    task = PermutedMNISTTask(args.seed)
     subject_model_io = TarModelWriter('mnist/subject-models')
 
     if args.evaluate_subject_model:
