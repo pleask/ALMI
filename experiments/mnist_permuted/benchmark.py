@@ -127,9 +127,10 @@ if __name__ == '__main__':
     parser.add_argument("--evaluate_subject_model", action='store_true', help="Evaluate a subject model.")
     parser.add_argument("--seed", type=float, help="Random seed.", default=0.)
     parser.add_argument("--device", type=str, default="cuda", help="Device to train or evaluate models on")
+    parser.add_argument("--subject_model_path", type=str, help="Path of the subject models")
     args = parser.parse_args()
 
-    subject_model_io = TarModelWriter('subject-models')
+    subject_model_io = TarModelWriter(args.subject_model_path)
 
     if args.evaluate_subject_model:
         evaluate(subject_model_io)
@@ -145,7 +146,8 @@ if __name__ == '__main__':
             pass
 
         l1_penalty_weights = [0.]
-        state_space = [AdamTrainer(task, 30, 10000, lr=0.01, l1_penalty_weight=l1pw, device=args.device) for l1pw in l1_penalty_weights]
+        epochs = 30
+        state_space = [AdamTrainer(task, epochs, 1000, lr=0.01, l1_penalty_weight=l1pw, device=args.device) for l1pw in l1_penalty_weights]
         subject_model = MNIST_CNN
 
         sample_model = subject_model(task)
