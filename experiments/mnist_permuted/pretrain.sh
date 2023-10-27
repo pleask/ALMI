@@ -6,7 +6,7 @@
 #SBATCH --qos=short
 #SBATCH --time=2-00:00:00
 #SBATCH --output=mnist/outs/%A_%a.out
-#SBATCH --array 0-9999
+#SBATCH --array 0-999
 #SBATCH --exclude gpu4,gpu5,gpu6
 
 source /etc/profile
