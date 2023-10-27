@@ -1,20 +1,14 @@
 #!/bin/bash
 #SBATCH -N 1
-#SBATCH -c 4
-#SBATCH --gres=gpu:1
-#SBATCH -p res-gpu-small
+#SBATCH -c 1
+#SBATCH -p shared
 #SBATCH --qos=short
 #SBATCH --time=2-00:00:00
-#SBATCH --output=mnist/outs/%A_%a.out
-#SBATCH --array 0-999
-#SBATCH --exclude gpu4,gpu5,gpu6
+#SBATCH -o /nobackup/wclv88/bounding-mi-data/mnist/outs/slurm-%A_%a.out
+#SBATCH --array 0-4999
 
-source /etc/profile
-module load cuda/11.7
+module load python/3.10.8
+module load $PYTHON_BUILD_MODULES
 
-source /etc/profile
-
-for index in $(seq 0 4); do
-    SEED=$(( $SLURM_ARRAY_TASK_ID * 5 + $index ))
-	stdbuf -oL bounding-mi/bin/python bounding-mi-repo/experiments/mnist_permuted/benchmark.py --seed $SEED
-done
+SEED=$SLURM_ARRAY_TASK_ID
+stdbuf -oL bounding-mi/bin/python bounding-mi-repo/experiments/mnist_permuted/benchmark.py --seed $SEED
