@@ -2,7 +2,6 @@
 #SBATCH -N 1
 #SBATCH -c 1
 #SBATCH -p shared
-#SBATCH --qos=short
 #SBATCH --time=2-00:00:00
 #SBATCH -o /nobackup/wclv88/bounding-mi-data/mnist/outs/slurm-%A_%a.out
 #SBATCH --array 0-4999
