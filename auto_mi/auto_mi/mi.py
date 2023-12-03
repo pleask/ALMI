@@ -30,10 +30,10 @@ def train_mi_model(interpretability_model, interpretability_model_io, subject_mo
     validation_dataset = MultifunctionSubjectModelDataset(subject_model_io, validation_models, task, subject_model)
     validation_dataloader = DataLoader(validation_dataset, batch_size=batch_size, shuffle=True)
 
-    optimizer = torch.optim.Adam(interpretability_model.parameters(), lr=0.00001, weight_decay=0.001)
+    optimizer = torch.optim.Adam(interpretability_model.parameters(), lr=0.0001, weight_decay=0.001)
     criterion = nn.BCELoss()
 
-    for epoch in tqdm(range(1000), desc='Interpretability model epochs'):
+    for epoch in tqdm(range(epochs), desc='Interpretability model epochs'):
         train_loss = 0.
         interpretability_model.train()
         for i, (inputs, targets) in enumerate(train_dataloader):
@@ -44,14 +44,6 @@ def train_mi_model(interpretability_model, interpretability_model_io, subject_mo
             optimizer.step()
             train_loss += loss
         
-        print('TRAIN')
-        print(outputs[0])
-        for i in range(10):
-            print(
-                torch.argmax(outputs[i], dim=-1).detach().cpu().numpy().tolist(),
-                torch.argmax(targets[i], dim=-1).detach().cpu().numpy().tolist()
-            )
-
         wandb.log({'train_loss': train_loss})
 
         interpretability_model.eval()
@@ -62,14 +54,12 @@ def train_mi_model(interpretability_model, interpretability_model_io, subject_mo
                 loss = criterion(outputs, targets.to(device))
                 eval_loss += loss.item()
 
-            print('VAL')
-            for i in range(10):
-                print(
-                    torch.argmax(outputs[i], dim=-1).detach().cpu().numpy().tolist(),
-                    torch.argmax(targets[i], dim=-1).detach().cpu().numpy().tolist()
-                )
-
-        wandb.log({'validation_loss': eval_loss})
+            
+            predicted_classes = torch.argmax(outputs, dim=-1)
+            target_classes = torch.argmax(targets, dim=-1)
+            accuracy = torch.sum(torch.all(predicted_classes.detach().cpu() == target_classes.cpu(), dim=1)).item() / len(predicted_classes)
+            
+        wandb.log({'validation_loss': eval_loss, 'validation_accuracy': accuracy})
 
         interpretability_model_io.write_model(f'{trainer.get_metadata()}', interpretability_model)
 

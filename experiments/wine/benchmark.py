@@ -27,7 +27,7 @@ from auto_mi.mi import get_matching_subject_models_names, Transformer, Multifunc
 TRAIN_RATIO = 0.7
 
 
-class PermutedIrisTask(Task):
+class PermutedWineTask(Task):
     def __init__(self, seed=0., train=True, **kwargs):
         super().__init__(seed=seed, train=train)
         self._permutations = list(permutations(range(3)))
@@ -36,11 +36,11 @@ class PermutedIrisTask(Task):
         """
         Gets the dataset for the ith example of this task.
         """
-        return PermutedIrisExample(self._permutations[i % len(self._permutations)], type=type)
+        return PermutedWineExample(self._permutations[i % len(self._permutations)], type=type)
 
     @property
     def input_shape(self):
-        return (4,)
+        return (13,)
 
     @property
     def output_shape(self):
@@ -54,13 +54,14 @@ class PermutedIrisTask(Task):
         return F.nll_loss(x, y)
 
 
-class PermutedIrisExample(Example):
+# TODO: Commonise this with the iris code (same for models)
+class PermutedWineExample(Example):
     def __init__(self, permutation_map, type=TRAIN):
         self._permutation_map = permutation_map
 
-        iris_dataset = datasets.load_iris()
-        X = iris_dataset.data
-        y = iris_dataset.target
+        wine_dataset = datasets.load_wine()
+        X = wine_dataset.data
+        y = wine_dataset.target
 
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
@@ -91,11 +92,11 @@ class PermutedIrisExample(Example):
         return F.one_hot(torch.tensor(self._permutation_map)).to(torch.float32)
 
 
-class OverfittingIrisClassifier(nn.Module, MetadataBase):
+class OverfittingWineClassifier(nn.Module, MetadataBase):
     def __init__(self, *_):
         super().__init__()
         layer_size = 1000
-        self.fc1 = nn.Linear(4, layer_size)
+        self.fc1 = nn.Linear(13, layer_size)
         self.relu = nn.ReLU()
         self.fc2 = nn.Linear(layer_size, layer_size)
         self.relu = nn.ReLU()
@@ -111,12 +112,12 @@ class OverfittingIrisClassifier(nn.Module, MetadataBase):
         return self.softmax(x)
 
 
-class IrisClassifier(nn.Module, MetadataBase):
+class WineClassifier(nn.Module, MetadataBase):
     def __init__(self, *_):
-        super(IrisClassifier, self).__init__()
-        self.fc1 = nn.Linear(4, 8)
+        super().__init__()
+        self.fc1 = nn.Linear(13, 32)
         self.relu = nn.ReLU()
-        self.fc2 = nn.Linear(8, 3)
+        self.fc2 = nn.Linear(32, 3)
         self.softmax = nn.Softmax(dim=-1)
 
     def forward(self, x):
@@ -126,7 +127,7 @@ class IrisClassifier(nn.Module, MetadataBase):
         return self.softmax(x)
 
 
-class IrisInterpretabilityModel(nn.Module, MetadataBase):
+class WineInterpretabilityModel(nn.Module, MetadataBase):
     def __init__(self, in_size, out_shape, layer_scale=5):
         super().__init__()
         self.out_shape = out_shape
@@ -153,31 +154,32 @@ def evaluate(subject_model_io):
     accuracies = []
     for model_idx in range(len(metadata)):
         print(f'Model {model_idx}')
-        task = PermutedIrisTask(seed=metadata[model_idx]['task']['seed'])
+        task = PermutedWineTask(seed=metadata[model_idx]['task']['seed'])
         example = task.get_dataset(metadata[model_idx]['index'], type=VAL)
         model_id = metadata[model_idx]['id']
         permutation_map = metadata[model_idx]['example']['permutation_map']
         print(f"Permutation map: {permutation_map}")
-        model = subject_model_io.get_model(IrisClassifier(), model_id)
+        model = subject_model_io.get_model(WineClassifier(), model_id)
         
         correct = []
-        for _ in range(10):
+        for _ in range(100):
             i = random.randint(0, len(example)-1)
             input, label = example[i]
             prediction = model(torch.Tensor(input).unsqueeze(0))
             # print(label, torch.argmax(prediction, -1).item())
             correct.append((torch.argmax(prediction, -1) == label)[0].item())
-        print(correct)
-        accuracy = sum(correct) /  10
+        accuracy = sum(correct) /  100
         accuracies.append(accuracy)
     print(sum(accuracies)/ len(accuracies))
+    
+            
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Run either pretraining or the full pipeline.')
     parser.add_argument("--evaluate_subject_model", action='store_true', help="Evaluate a subject model.")
     parser.add_argument("--train_subject_models", action='store_true', help="Train the subject models.")
-    parser.add_argument("--batch_size", type=int, help="Number of subject models to train. 1000 is enough in total.", default=1000)
+    parser.add_argument("--batch_size", type=int, help="Number of subject models to train", default=100)
     parser.add_argument("--overfit", action='store_true', help='Overfit the subject models to the data (ie. make the subject models big)')
     parser.add_argument("--seed", type=float, help="Random seed.", default=0.)
     parser.add_argument("--device", type=str, default="cuda", help="Device to train or evaluate models on")
@@ -192,13 +194,13 @@ if __name__ == '__main__':
         evaluate(subject_model_io)
         quit()
 
-    task = PermutedIrisTask(args.seed)
-    epochs = 300
+    task = PermutedWineTask(args.seed)
+    epochs = 100
     trainer = AdamTrainer(task, epochs, 1000, lr=0.01, device=args.device)
 
-    subject_model = IrisClassifier
+    subject_model = WineClassifier
     if args.overfit:
-        subject_model = OverfittingIrisClassifier
+        subject_model = OverfittingWineClassifier
     sample_model = subject_model(task)
     subject_model_parameter_count = sum(p.numel() for p in sample_model.parameters())
     print('Layer parameters')
@@ -217,5 +219,4 @@ if __name__ == '__main__':
         interpretability_model = Transformer(subject_model_parameter_count, task.mi_output_shape, hidden_size=256, num_layers=6, num_heads=8).to(args.device)
         interpretability_model_parameter_count = sum(p.numel() for p in interpretability_model.parameters())
         print(f'Interpretability model parameter count: {interpretability_model_parameter_count}')
-        trainer = AdamTrainer(task, 100, 1000, lr=0.01, device=args.device)
         train_mi_model(interpretability_model, interpretability_model_io, subject_model, subject_model_io, trainer, task, device=args.device)
