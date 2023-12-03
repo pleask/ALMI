@@ -19,6 +19,61 @@ from auto_mi.tasks import SimpleFunctionRecoveryTask
 TRAIN_RATIO = 0.
 INTERPRETABILITY_BATCH_SIZE = 2**7
 
+# TODO: subject_model can go into the IO class rather than be passed in here
+def train_mi_model(interpretability_model, interpretability_model_io, subject_model, subject_model_io, trainer, task, batch_size=2**7, epochs=100, device='cuda'):
+    all_subject_models, _ = get_matching_subject_models_names(subject_model_io, trainer, task=task)
+    wandb.log({'subject_model_count': len(all_subject_models)})
+    print(f'Using {len(all_subject_models)} subject models')
+    validation_models, train_models  = all_subject_models[:int(0.2*len(all_subject_models))], all_subject_models[int(0.2*len(all_subject_models)):]
+    train_dataset = MultifunctionSubjectModelDataset(subject_model_io, train_models, task, subject_model)
+    train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    validation_dataset = MultifunctionSubjectModelDataset(subject_model_io, validation_models, task, subject_model)
+    validation_dataloader = DataLoader(validation_dataset, batch_size=batch_size, shuffle=True)
+
+    optimizer = torch.optim.Adam(interpretability_model.parameters(), lr=0.00001, weight_decay=0.001)
+    criterion = nn.BCELoss()
+
+    for epoch in tqdm(range(1000), desc='Interpretability model epochs'):
+        train_loss = 0.
+        interpretability_model.train()
+        for i, (inputs, targets) in enumerate(train_dataloader):
+            optimizer.zero_grad()
+            outputs = interpretability_model(inputs.to(device, non_blocking=True))
+            loss = criterion(outputs, targets.to(device, non_blocking=True))
+            loss.backward()
+            optimizer.step()
+            train_loss += loss
+        
+        print('TRAIN')
+        print(outputs[0])
+        for i in range(10):
+            print(
+                torch.argmax(outputs[i], dim=-1).detach().cpu().numpy().tolist(),
+                torch.argmax(targets[i], dim=-1).detach().cpu().numpy().tolist()
+            )
+
+        wandb.log({'train_loss': train_loss})
+
+        interpretability_model.eval()
+        with torch.no_grad():
+            eval_loss = 0.
+            for inputs, targets in validation_dataloader:
+                outputs = interpretability_model(inputs.to(device))
+                loss = criterion(outputs, targets.to(device))
+                eval_loss += loss.item()
+
+            print('VAL')
+            for i in range(10):
+                print(
+                    torch.argmax(outputs[i], dim=-1).detach().cpu().numpy().tolist(),
+                    torch.argmax(targets[i], dim=-1).detach().cpu().numpy().tolist()
+                )
+
+        wandb.log({'validation_loss': eval_loss})
+
+        interpretability_model_io.write_model(f'{trainer.get_metadata()}', interpretability_model)
+
+
 # TODO: Add wandb logging of the trained models
 def train_interpretability_model(model, task, subject_model_path, validation_subject_models, trainer, interpretabilty_model_io, reuse_count=1000):
     device = model.device
@@ -73,21 +128,22 @@ def get_matching_subject_models_names(model_writer, trainer, task=SimpleFunction
     matching_subject_models_names = []
     losses = []
     metadata = model_writer.get_metadata()
-
     for md in metadata:
         if md['task']['name'] != type(task).__name__:
             continue
 
         trainer_metadata = trainer.get_metadata()
-        if not all(md['trainer'][key] == trainer_metadata[key] for key in ['name', 'weight_decay', 'lr', 'prune_amount']):
+        if not all(md['trainer'][key] == trainer_metadata[key] for key in ['name', 'weight_decay', 'lr', 'l1_penalty_weight']):
             continue
 
         if md['id'] in exclude:
+            print('exclude')
             continue
 
         # Have had a few issues where model pickles aren't saved but their
         # metadata is still written, so skip those models.
         if not model_writer.check_model_exists(md['id']):
+            print('does not exist')
             continue
 
         matching_subject_models_names.append(md['id'])
@@ -98,36 +154,32 @@ def get_matching_subject_models_names(model_writer, trainer, task=SimpleFunction
 
 
 class MultifunctionSubjectModelDataset(Dataset):
-    def __init__(self, model_loader, subject_model_ids, device='cpu'):
+    def __init__(self, model_loader, subject_model_ids, task, subject_model, device='cpu'):
         self._model_loader = model_loader
         self.subject_model_ids = subject_model_ids
         self.device = device
+        self.task = task
+        self.subject_model = subject_model
 
         self.metadata = self._index_metadata()
-        self.cache = {}
 
     def __len__(self):
         return len(self.subject_model_ids)
 
     def __getitem__(self, idx):
-        if idx in self.cache:
-            return self.cache[idx][0], self.cache[idx][1]
         name = self.subject_model_ids[idx]
         metadata = self.metadata[name]
 
-        task = TASKS[metadata['task']['name']](**metadata['task'])
-        example = task.get_dataset(metadata['index'], purpose=MI)
+        example = self.task.get_dataset(metadata['index'], type=MI)
+        # TODO: Something is broken with the datasets so here's a workaround but fix asap
+        example._permutation_map = metadata['example']['permutation_map']
         y = example.get_target()
 
-        model = self._model_loader.get_model(SUBJECT_MODELS[metadata['model']['name']](task), name)
+        model = self._model_loader.get_model(self.subject_model(self.task), name)
 
         x = torch.concat(
             [param.detach().reshape(-1) for _, param in model.named_parameters()]
         )
-
-        del model
-
-        self.cache[idx] = (x, y)
 
         return x, y
 

@@ -164,14 +164,14 @@ def train_subject_models(task, model, trainer, model_writer, count=10, device='c
     """
     nets = [model(task).to(device) for _ in range(count)]
     targets = [task.get_dataset(i).get_target() for i in range(count)]
-    losses = trainer.train_parallel(
+    losses, train_losses = trainer.train_parallel(
         nets,
         [task.get_dataset(i) for i in range(count)],
         [task.get_dataset(i, type=VAL) for i in range(count)],
     )
 
     model_ids = []
-    for i, (net, target, loss) in enumerate(zip(nets, targets, losses)):
+    for i, (net, target, loss, train_loss) in enumerate(zip(nets, targets, losses, train_losses)):
         net_id = str(uuid.uuid4())
         model_writer.write_metadata(
             md = {
@@ -180,6 +180,7 @@ def train_subject_models(task, model, trainer, model_writer, count=10, device='c
                 'model': net.get_metadata(),
                 'trainer': trainer.get_metadata(),
                 "loss": loss,
+                "train_loss": train_loss,
                 "id": str(net_id),
                 "time": strftime("%Y-%m-%d %H:%M:%S", gmtime()),
                 "index": i,

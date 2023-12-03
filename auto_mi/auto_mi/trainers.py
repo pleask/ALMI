@@ -27,7 +27,8 @@ class BaseTrainer(MetadataBase, ABC):
         pass
 
     def _train_inner(self, models, examples, validation_examples, optimizers, training_dataloaders, l1_penalty_weight=0.):
-        for _ in tqdm(range(self.epochs), desc='Subject model epochs'):
+        train_losses = []
+        for i in tqdm(range(self.epochs), desc='Subject model epochs'):
             for net, optimizer, training_data in zip(models, optimizers, training_dataloaders):
                 net = net.to(self.device)
                 net.train()
@@ -41,8 +42,10 @@ class BaseTrainer(MetadataBase, ABC):
                     loss.backward()
                     optimizer.step()
                 net.eval()
+                if i == self.epochs - 1:
+                    train_losses.append(loss.detach().cpu().item())
 
-        return [self.evaluate(net, validation_example) for net, validation_example in zip(models, validation_examples)]
+        return [self.evaluate(net, validation_example) for net, validation_example in zip(models, validation_examples)], train_losses
 
     def evaluate(self, net, example):
         data = DataLoader(example, batch_size=self.batch_size)
