@@ -8,6 +8,7 @@ from sklearn import datasets
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 import torch
+import torch.multiprocessing as mp
 import torch.nn.functional as F
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
@@ -145,6 +146,7 @@ def evaluate(subject_model_io):
 
 
 if __name__ == '__main__':
+    mp.set_start_method('spawn')
     parser = argparse.ArgumentParser(description='Run either pretraining or the full pipeline.')
     parser.add_argument("--evaluate_subject_model", action='store_true', help="Evaluate a subject model.")
     parser.add_argument("--train_subject_models", action='store_true', help="Train the subject models.")

@@ -26,7 +26,7 @@ def train_mi_model(interpretability_model, interpretability_model_io, subject_mo
     print(f'Using {len(all_subject_models)} subject models')
     validation_models, train_models  = all_subject_models[:int(0.2*len(all_subject_models))], all_subject_models[int(0.2*len(all_subject_models)):]
     train_dataset = MultifunctionSubjectModelDataset(subject_model_io, train_models, task, subject_model)
-    train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=24)
     validation_dataset = MultifunctionSubjectModelDataset(subject_model_io, validation_models, task, subject_model)
     validation_dataloader = DataLoader(validation_dataset, batch_size=batch_size, shuffle=True)
 
