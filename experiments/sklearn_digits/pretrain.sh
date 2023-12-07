@@ -5,7 +5,7 @@
 #SBATCH -p shared
 #SBATCH --time=2-00:00:00
 #SBATCH -o /nobackup/wclv88/sklearn_digits/outs/slurm-%A_%a.out
-#SBATCH --array 0-0
+#SBATCH --array 0-1999
 
 module load python/3.10.8
 module load $PYTHON_BUILD_MODULES

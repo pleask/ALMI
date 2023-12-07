@@ -158,7 +158,7 @@ if __name__ == '__main__':
     parser.add_argument("--interpretability_model_path", type=str, help="Path of the interpretability models")
     args = parser.parse_args()
 
-    subject_model_io = DirModelWriter(args.subject_model_path)
+    subject_model_io = TarModelWriter(args.subject_model_path)
     interpretability_model_io = DirModelWriter(args.interpretability_model_path)
 
     if args.evaluate_subject_model:
