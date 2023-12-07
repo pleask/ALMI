@@ -104,7 +104,7 @@ class DigitsClassifier(nn.Module, MetadataBase):
     def __init__(self, *_):
         super().__init__()
         self.conv1 = nn.Conv2d(1, 20, kernel_size=3, padding=1)
-        self.conv2 = nn.Conv2d(10, 20, kernel_size=3, padding=1)
+        self.conv2 = nn.Conv2d(20, 20, kernel_size=3, padding=1)
         self.fc1 = nn.Linear(20 * 2 * 2, 30)
         self.fc2 = nn.Linear(30, 10)
 
