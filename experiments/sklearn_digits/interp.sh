@@ -10,11 +10,5 @@
 source /etc/profile
 module load cuda/11.7
 
-# Halved batch size run
-# WAND_API_KEY=dd685d7aa9b38a2289e5784a961b81e22fc4c735  stdbuf -oL /home3/wclv88/bounding-mi/bin/python /home3/wclv88/bounding-mi-repo/experiments/sklearn_digits/benchmark.py --seed 0 --device cuda --subject_model_path sklearn_digits/subject_models --interpretability_model_path=sklearn_digits/interpretability_models --interpretability_batch_size '128'
 # Regular batch size with amp
-# WAND_API_KEY=dd685d7aa9b38a2289e5784a961b81e22fc4c735  stdbuf -oL /home3/wclv88/bounding-mi/bin/python /home3/wclv88/bounding-mi-repo/experiments/sklearn_digits/benchmark.py --seed 0 --device cuda --subject_model_path sklearn_digits/subject_models --interpretability_model_path=sklearn_digits/interpretability_models --interpretability_batch_size '256' --interpretability_mixed_precision
-# Halved batch size with gradient accumulation
-# WAND_API_KEY=dd685d7aa9b38a2289e5784a961b81e22fc4c735  stdbuf -oL /home3/wclv88/bounding-mi/bin/python /home3/wclv88/bounding-mi-repo/experiments/sklearn_digits/benchmark.py --seed 0 --device cuda --subject_model_path sklearn_digits/subject_models --interpretability_model_path=sklearn_digits/interpretability_models --interpretability_batch_size '128' --interpretability_gradient_accumulation 2
-# Regular batch size with amp
-# WAND_API_KEY=dd685d7aa9b38a2289e5784a961b81e22fc4c735  stdbuf -oL /home3/wclv88/bounding-mi/bin/python /home3/wclv88/bounding-mi-repo/experiments/sklearn_digits/benchmark.py --seed 0 --device cuda --subject_model_path sklearn_digits/subject_models --interpretability_model_path=sklearn_digits/interpretability_models --interpretability_batch_size '256' --interpretability_mixed_precision --interpretability_gradient_accumulation 2
+# WAND_API_KEY=dd685d7aa9b38a2289e5784a961b81e22fc4c735  stdbuf -oL /home3/wclv88/bounding-mi/bin/python /home3/wclv88/bounding-mi-repo/experiments/sklearn_digits/benchmark.py --seed 0 --device cuda --subject_model_path sklearn_digits/subject_models --interpretability_model_path=sklearn_digits/interpretability_models --interpretability_batch_size 128 --interpretability_mixed_precision --interpretability_gradient_accumulation 2
