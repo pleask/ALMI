@@ -53,6 +53,7 @@ def train_mi_model(interpretability_model, interpretability_model_io, subject_mo
     for epoch in tqdm(range(epochs), desc='Interpretability model epochs'):
         interpretability_model.train()
         for i, (inputs, targets) in enumerate(train_dataloader):
+            # TODO: make it so amp and grad accum can be used together
             if amp:
                 optimizer.zero_grad()
 
@@ -63,10 +64,12 @@ def train_mi_model(interpretability_model, interpretability_model_io, subject_mo
                 scaler.scale(loss).backward()
                 scaler.step(optimizer)
                 scaler.update()
+                wandb.log({'train_loss': loss})
             elif grad_accum_steps > 1:
                 outputs = interpretability_model(inputs.to(device, non_blocking=True))
                 loss = criterion(outputs, targets.to(device, non_blocking=True))
                 loss.backward()
+                wandb.log({'train_loss': loss.detach().cpu()})
 
                 if (i + 1) % grad_accum_steps == 0:
                     optimizer.step()
@@ -77,8 +80,7 @@ def train_mi_model(interpretability_model, interpretability_model_io, subject_mo
                 loss = criterion(outputs, targets.to(device, non_blocking=True))
                 loss.backward()
                 optimizer.step()
-        
-            wandb.log({'train_loss': loss})
+                wandb.log({'train_loss': loss})
 
         interpretability_model.eval()
         with torch.no_grad():
