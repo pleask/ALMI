@@ -1,6 +1,5 @@
 import argparse
 from itertools import permutations
-import os
 import random
 
 import numpy as np
@@ -11,18 +10,15 @@ import torch
 import torch.multiprocessing as mp
 import torch.nn.functional as F
 import torch.nn as nn
-from torch.utils.data import Dataset, DataLoader
-import torchvision
-import torchvision.transforms as transforms
-from tqdm import tqdm
+from torch.utils.data import Dataset
 import wandb
 
 from auto_mi.base import MetadataBase
 from auto_mi.rl import pretrain_subject_models
-from auto_mi.tasks import Task, Example, TRAIN, VAL
+from auto_mi.tasks import Task, Example, TRAIN, VAL, MI
 from auto_mi.trainers import AdamTrainer
 from auto_mi.utils import DirModelWriter, TarModelWriter
-from auto_mi.mi import get_matching_subject_models_names, Transformer, MultifunctionSubjectModelDataset, train_mi_model
+from auto_mi.mi import Transformer, train_mi_model, PositionalEncoding
 
 
 TRAIN_RATIO = 0.7
@@ -32,7 +28,6 @@ TRAIN_RATIO = 0.7
 class PermutedDigitsTask(Task):
     def __init__(self, seed=0., train=True, **kwargs):
         super().__init__(seed=seed, train=train)
-        self._permutations = list(permutations(range(3)))
         p = list(permutations(range(10)))
         # Shuffle the permutations so we see examples where all output classes
         # are remapped.
@@ -66,6 +61,9 @@ class PermutedDigitsTask(Task):
 class PermutedDigitsExample(Example):
     def __init__(self, permutation_map, type=TRAIN):
         self._permutation_map = permutation_map
+
+        if type==MI:
+            return
 
         digits_dataset = datasets.load_digits()
         X = digits_dataset.data
@@ -119,7 +117,7 @@ class DigitsClassifier(nn.Module, MetadataBase):
 
 
 def evaluate(subject_model_io):
-    metadata = subject_model_io.get_metadata()
+    metadata = subject_model_io.get_metadata()[:100]
     accuracies = []
     for model_idx in range(len(metadata)):
         print(f'Model {model_idx}')
@@ -135,7 +133,7 @@ def evaluate(subject_model_io):
             i = random.randint(0, len(example)-1)
             input, label = example[i]
             prediction = model(torch.Tensor(input).unsqueeze(0))
-            # print(label, torch.argmax(prediction, -1).item())
+            print(label, torch.argmax(prediction, -1).item())
             correct.append((torch.argmax(prediction, -1) == label)[0].item())
         accuracy = sum(correct) /  100
         print(accuracy)
@@ -143,6 +141,26 @@ def evaluate(subject_model_io):
     print(sum(accuracies)/ len(accuracies))
     
             
+class FFNN(nn.Module, MetadataBase):
+    def __init__(self, in_size, out_shape, layer_scale=5):
+        super().__init__()
+        self.out_shape = out_shape
+        out_size = torch.zeros(out_shape).view(-1).shape[0]
+        self.fc1 = nn.Linear(in_size, int(64*layer_scale))
+        self.relu1 = nn.ReLU()
+        self.fc2 = nn.Linear(int(64*layer_scale), int(32*layer_scale))
+        self.relu2 = nn.ReLU()
+        self.fc3 = nn.Linear(int(32*layer_scale), out_size)
+        self.softmax = nn.Softmax(dim=-1)
+
+    def forward(self, x):
+        x = self.fc1(x)
+        x = self.relu1(x)
+        x = self.fc2(x)
+        x = self.relu2(x)
+        x = self.fc3(x)
+        x = x.view(-1, *self.out_shape)
+        return self.softmax(x)
 
 
 if __name__ == '__main__':
@@ -185,7 +203,8 @@ if __name__ == '__main__':
     else:
         wandb.init(project='bounding-mi', entity='patrickaaleask', reinit=True)
 
-        interpretability_model = Transformer(subject_model_parameter_count, task.mi_output_shape, hidden_size=128, num_layers=4, num_heads=8).to(args.device)
+        positional_encoding = PositionalEncoding(128, subject_model_parameter_count)
+        interpretability_model = Transformer(subject_model_parameter_count, task.mi_output_shape, positional_encoding, num_layers=12).to(args.device)
         interpretability_model_parameter_count = sum(p.numel() for p in interpretability_model.parameters())
         print(f'Interpretability model parameter count: {interpretability_model_parameter_count}')
-        train_mi_model(interpretability_model, interpretability_model_io, subject_model, subject_model_io, trainer, task, device=args.device)
+        train_mi_model(interpretability_model, interpretability_model_io, subject_model, subject_model_io, trainer, task, device=args.device, batch_size=2**3, lr=0.0001)

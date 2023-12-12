@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 import argparse
 import json
 import os
+import random
 from time import gmtime, strftime
 import uuid
 
@@ -155,6 +156,9 @@ class TarModelWriter(DirModelWriter):
         os.remove(tmp_model_path)
 
 
+# class HDF5ModelWriter()
+
+
 def train_subject_models(task, model, trainer, model_writer, count=10, device='cpu'):
     """
     Trains subject models using the specified trainer. Returns the average loss
@@ -207,3 +211,28 @@ def get_args_for_slum():
     parser.add_argument("--path", type=str, help="Directory to which to save the models")
     args = parser.parse_args()
     return args
+
+
+def evaluate_subject_model(task_class, subject_model_class, subject_model_io, samples=100):
+    metadata = subject_model_io.get_metadata()
+    accuracies = []
+    for model_idx in range(len(metadata)):
+        print(f'Model {model_idx}')
+        task = task_class(seed=metadata[model_idx]['task']['seed'])
+        example = task.get_dataset(metadata[model_idx]['index'], type=VAL)
+        model_id = metadata[model_idx]['id']
+        permutation_map = metadata[model_idx]['example']['permutation_map']
+        print(f"Permutation map: {permutation_map}")
+        model = subject_model_io.get_model(subject_model_class(), model_id)
+        
+        correct = []
+        for _ in range(samples):
+            i = random.randint(0, len(example)-1)
+            input, label = example[i]
+            prediction = model(torch.Tensor(input).unsqueeze(0))
+            # print(label, torch.argmax(prediction, -1).item())
+            correct.append((torch.argmax(prediction, -1) == label)[0].item())
+        accuracy = sum(correct) /  samples
+        print(accuracy)
+        accuracies.append(accuracy)
+    print('Overall accuracy:', sum(accuracies)/ len(accuracies))

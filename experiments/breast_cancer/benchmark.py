@@ -1,35 +1,32 @@
 import argparse
 import random
 
-import numpy as np
 from sklearn import datasets
 from sklearn.preprocessing import StandardScaler
-import torch
 import torch.nn as nn
 import wandb
 
 from auto_mi.base import MetadataBase
+from auto_mi.mi import Transformer, train_mi_model
 from auto_mi.rl import pretrain_subject_models
+from auto_mi.sklearn import SklearnExample, SklearnTask
 from auto_mi.tasks import TRAIN, VAL
 from auto_mi.trainers import AdamTrainer
-from auto_mi.utils import DirModelWriter, TarModelWriter
-from auto_mi.mi import Transformer, train_mi_model
-from auto_mi.sklearn import SklearnExample, SklearnTask
+from auto_mi.utils import DirModelWriter, TarModelWriter, evaluate_subject_model
 
-
-class PermutedIrisTask(SklearnTask):
+class PermutedBreastCancerTask(SklearnTask):
     def __init__(self, seed=0., train=True, **kwargs):
-        super().__init__(PermutedIrisExample, (4,), 3, seed=seed, train=train)
+        super().__init__(PermutedBreastCancerExample, (30,), 2, seed=seed, train=train)
 
 
-class PermutedIrisExample(SklearnExample):
+class PermutedBreastCancerExample(SklearnExample):
     def __init__(self, permutation_map, type=TRAIN):
         super().__init__(permutation_map, type)
-
+    
     def _get_dataset(self):
-        iris_dataset = datasets.load_iris()
-        X = iris_dataset.data.astype(float)
-        y = iris_dataset.target
+        dataset = datasets.load_breast_cancer()
+        X = dataset.data.astype(float)
+        y = dataset.target
 
         scaler = StandardScaler()
         X = scaler.fit_transform(X)
@@ -37,12 +34,12 @@ class PermutedIrisExample(SklearnExample):
         return X, y
 
 
-class IrisClassifier(nn.Module, MetadataBase):
+class BreastCancerClassifier(nn.Module, MetadataBase):
     def __init__(self, *_):
-        super(IrisClassifier, self).__init__()
-        self.fc1 = nn.Linear(4, 8)
+        super().__init__()
+        self.fc1 = nn.Linear(30, 30)
         self.relu = nn.ReLU()
-        self.fc2 = nn.Linear(8, 3)
+        self.fc2 = nn.Linear(30, 2)
         self.softmax = nn.Softmax(dim=-1)
 
     def forward(self, x):
@@ -50,31 +47,6 @@ class IrisClassifier(nn.Module, MetadataBase):
         x = self.relu(x)
         x = self.fc2(x)
         return self.softmax(x)
-
-
-def evaluate(subject_model_io):
-    metadata = subject_model_io.get_metadata()
-    accuracies = []
-    for model_idx in range(len(metadata)):
-        print(f'Model {model_idx}')
-        task = PermutedIrisTask(seed=metadata[model_idx]['task']['seed'])
-        example = task.get_dataset(metadata[model_idx]['index'], type=VAL)
-        model_id = metadata[model_idx]['id']
-        permutation_map = metadata[model_idx]['example']['permutation_map']
-        print(f"Permutation map: {permutation_map}")
-        model = subject_model_io.get_model(IrisClassifier(), model_id)
-        
-        correct = []
-        for _ in range(10):
-            i = random.randint(0, len(example)-1)
-            input, label = example[i]
-            prediction = model(torch.Tensor(input).unsqueeze(0))
-            # print(label, torch.argmax(prediction, -1).item())
-            correct.append((torch.argmax(prediction, -1) == label)[0].item())
-        print(correct)
-        accuracy = sum(correct) /  10
-        accuracies.append(accuracy)
-    print(sum(accuracies)/ len(accuracies))
 
 
 if __name__ == '__main__':
@@ -91,15 +63,16 @@ if __name__ == '__main__':
     subject_model_io = DirModelWriter(args.subject_model_path)
     interpretability_model_io = DirModelWriter(args.interpretability_model_path)
 
+    task = PermutedBreastCancerTask(args.seed)
+
     if args.evaluate_subject_model:
-        evaluate(subject_model_io)
+        evaluate_subject_model(PermutedBreastCancerTask, BreastCancerClassifier, subject_model_io)
         quit()
 
-    task = PermutedIrisTask(args.seed)
     epochs = 300
     trainer = AdamTrainer(task, epochs, 1000, lr=0.01, device=args.device)
 
-    subject_model = IrisClassifier
+    subject_model = BreastCancerClassifier
     sample_model = subject_model(task)
     subject_model_parameter_count = sum(p.numel() for p in sample_model.parameters())
     print('Layer parameters')

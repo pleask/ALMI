@@ -8,6 +8,7 @@ import random
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
+from torchvision import transforms
 import wandb
 from tqdm import tqdm
 
@@ -20,21 +21,33 @@ TRAIN_RATIO = 0.
 INTERPRETABILITY_BATCH_SIZE = 2**7
 
 # TODO: subject_model can go into the IO class rather than be passed in here
-def train_mi_model(interpretability_model, interpretability_model_io, subject_model, subject_model_io, trainer, task, batch_size=2**7, epochs=100, device='cuda'):
+def train_mi_model(interpretability_model, interpretability_model_io, subject_model, subject_model_io, trainer, task, batch_size=2**7, epochs=100, device='cuda', lr=0.0001):
     all_subject_models, _ = get_matching_subject_models_names(subject_model_io, trainer, task=task)
     wandb.log({'subject_model_count': len(all_subject_models)})
     print(f'Using {len(all_subject_models)} subject models')
     validation_models, train_models  = all_subject_models[:int(0.2*len(all_subject_models))], all_subject_models[int(0.2*len(all_subject_models)):]
-    train_dataset = MultifunctionSubjectModelDataset(subject_model_io, train_models, task, subject_model)
-    train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=24)
-    validation_dataset = MultifunctionSubjectModelDataset(subject_model_io, validation_models, task, subject_model)
+
+    untransformed_dataset = MultifunctionSubjectModelDataset(subject_model_io, train_models, task, subject_model)
+    mean = 0.
+    std = 0.
+    samples = 0
+    for data in untransformed_dataset:
+        model = data[0]
+        mean += model.mean()
+        std += model.std()
+        samples += 1
+    mean = mean / samples
+    std = std / samples
+    
+    train_dataset = MultifunctionSubjectModelDataset(subject_model_io, train_models, task, subject_model, mean=mean, std=std)
+    train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    validation_dataset = MultifunctionSubjectModelDataset(subject_model_io, validation_models, task, subject_model, mean=mean, std=std)
     validation_dataloader = DataLoader(validation_dataset, batch_size=batch_size, shuffle=True)
 
-    optimizer = torch.optim.Adam(interpretability_model.parameters(), lr=0.0001, weight_decay=0.001)
+    optimizer = torch.optim.Adam(interpretability_model.parameters(), lr=lr, weight_decay=0.001)
     criterion = nn.BCELoss()
 
     for epoch in tqdm(range(epochs), desc='Interpretability model epochs'):
-        train_loss = 0.
         interpretability_model.train()
         for i, (inputs, targets) in enumerate(train_dataloader):
             optimizer.zero_grad()
@@ -42,9 +55,8 @@ def train_mi_model(interpretability_model, interpretability_model_io, subject_mo
             loss = criterion(outputs, targets.to(device, non_blocking=True))
             loss.backward()
             optimizer.step()
-            train_loss += loss
         
-        wandb.log({'train_loss': train_loss})
+            wandb.log({'train_loss': loss})
 
         interpretability_model.eval()
         with torch.no_grad():
@@ -144,12 +156,14 @@ def get_matching_subject_models_names(model_writer, trainer, task=SimpleFunction
 
 
 class MultifunctionSubjectModelDataset(Dataset):
-    def __init__(self, model_loader, subject_model_ids, task, subject_model, device='cpu'):
+    def __init__(self, model_loader, subject_model_ids, task, subject_model, mean=0., std=1., device='cpu'):
         self._model_loader = model_loader
         self.subject_model_ids = subject_model_ids
         self.device = device
         self.task = task
         self.subject_model = subject_model
+        self.mean = mean
+        self.std = std
 
         self.metadata = self._index_metadata()
 
@@ -170,6 +184,7 @@ class MultifunctionSubjectModelDataset(Dataset):
         x = torch.concat(
             [param.detach().reshape(-1) for _, param in model.named_parameters()]
         )
+        x = (x - self.mean) / self.std
 
         return x, y
 
@@ -189,61 +204,47 @@ class MultifunctionSubjectModelDataset(Dataset):
 
 
 class PositionalEncoding(nn.Module):
-    def __init__(self, hidden_size, max_seq_len=5000, dropout=0.1):
-        super().__init__()
-
-        self.dropout = nn.Dropout(p=dropout)
-
-        pe = torch.zeros(max_seq_len, hidden_size)
-        position = torch.arange(0, max_seq_len, dtype=torch.float).unsqueeze(1)
-        div_term = torch.exp(
-            torch.arange(0, hidden_size, 2).float() * (-math.log(10000.0) / hidden_size)
-        )
-        pe[:, 0::2] = torch.sin(position * div_term)
-        pe[:, 1::2] = torch.cos(position * div_term)
-        pe = pe.unsqueeze(0).transpose(0, 1)
-        self.register_buffer("pe", pe)
+    def __init__(self, encoding_length=4, max_len=512):
+        super(PositionalEncoding, self).__init__()
+        position = torch.arange(0, max_len).unsqueeze(1).float()
+        div_term = torch.exp(torch.arange(0, encoding_length, 2).float() * -(torch.log(torch.tensor(10000.0)) / encoding_length))
+        pe = torch.zeros(1, max_len, encoding_length)
+        pe[:, :, 0::2] = torch.sin(position * div_term)
+        pe[:, :, 1::2] = torch.cos(position * div_term)
+        self.register_buffer('pe', pe)
 
     def forward(self, x):
-        x = x + self.pe[: x.size(0), :]
-        return self.dropout(x)
+        pe = self.pe[:, :x.size(1), :].expand(x.shape[0], -1, -1)
+        x = torch.cat([x, pe], dim=2)
+        return x
 
 
 class Transformer(nn.Module, MetadataBase):
-    def __init__(
-        self,
-        in_size,
-        out_shape,
-        num_layers=6,
-        hidden_size=256,
-        num_heads=8,
-        dropout=0.1,
-    ):
+    def __init__(self, subject_model_parameter_count, out_shape, positional_encoding, num_layers=6, num_heads=1):
         super().__init__()
-        
         self.out_shape = out_shape
         output_size = torch.zeros(out_shape).view(-1).shape[0]
+        self.transformer_encoder = nn.TransformerEncoder(
+            nn.TransformerEncoderLayer(d_model=129, nhead=num_heads),
+            num_layers=num_layers
+        )
 
-        self.embedding = nn.Linear(in_size, hidden_size)
-        self.pos_encoding = PositionalEncoding(hidden_size, dropout=dropout)
-
-        encoder_layer = nn.TransformerEncoderLayer(hidden_size, num_heads)
-        self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers)
-
-        self.output_layer = nn.Linear(hidden_size, output_size)
+        # Linear layer for classification
+        self.global_avg_pooling = nn.AdaptiveAvgPool1d(1)
+        self.fc = nn.Linear(subject_model_parameter_count, output_size)
         self.softmax = nn.Softmax(dim=-1)
+        self.positional_encoding = positional_encoding
 
     def forward(self, x):
-        x = self.embedding(x)
-        x = self.pos_encoding(x)
+        x = x.unsqueeze(-1)
+        x = self.positional_encoding(x)
         x = self.transformer_encoder(x)
-        x = self.output_layer(x.mean(dim=0))  # use mean pooling to obtain a single output value
-        x = x.view(-1, *self.out_shape)
-        return self.softmax(x)
 
-    @property
-    def device(self):
-        return self.output_layer.weight.device
+        x = self.global_avg_pooling(x).squeeze(2)
+        output = self.fc(x)
+        output = output.view(-1, *self.out_shape)
+
+        return self.softmax(output)
 
 
 class FeedForwardNN(nn.Module, MetadataBase):
