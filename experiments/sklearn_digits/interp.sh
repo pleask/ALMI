@@ -4,7 +4,7 @@
 #SBATCH -p res-gpu-small
 #SBATCH --qos=short
 #SBATCH --time=2-00:00:00
-#SBATCH --output=integer/outs/slurm-%j.out
+#SBATCH --output=sklearn_digits/outs/slurm-%j.out
 #SBATCH --gres=gpu:ampere:1
 
 source /etc/profile
