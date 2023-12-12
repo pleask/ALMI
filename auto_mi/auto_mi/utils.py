@@ -156,9 +156,6 @@ class TarModelWriter(DirModelWriter):
         os.remove(tmp_model_path)
 
 
-# class HDF5ModelWriter()
-
-
 def train_subject_models(task, model, trainer, model_writer, count=10, device='cpu'):
     """
     Trains subject models using the specified trainer. Returns the average loss

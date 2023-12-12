@@ -157,6 +157,7 @@ def train_optimiser_model(optimiser_model, interpretability_models, interpretabi
             })
 
 
+# TODO: Unwrap this
 def pretrain_subject_models(trainer, model_writer, subject_model, task, batch_size=10):
     """
     Trains random samples of subject models. This is so the dataset generation

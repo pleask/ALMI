@@ -13,7 +13,7 @@ from auto_mi.rl import pretrain_subject_models
 from auto_mi.tasks import TRAIN, VAL
 from auto_mi.trainers import AdamTrainer
 from auto_mi.utils import DirModelWriter, TarModelWriter
-from auto_mi.mi import Transformer, train_mi_model
+from auto_mi.mi import PositionalEncoding, Transformer, train_mi_model
 from auto_mi.sklearn import SklearnExample, SklearnTask
 
 
@@ -115,8 +115,8 @@ if __name__ == '__main__':
     else:
         wandb.init(project='bounding-mi', entity='patrickaaleask', reinit=True)
 
-        interpretability_model = Transformer(subject_model_parameter_count, task.mi_output_shape, hidden_size=256, num_layers=6, num_heads=8).to(args.device)
+        positional_encoding = PositionalEncoding(8, subject_model_parameter_count)
+        interpretability_model = Transformer(subject_model_parameter_count, task.mi_output_shape, positional_encoding, num_layers=6).to(args.device)
         interpretability_model_parameter_count = sum(p.numel() for p in interpretability_model.parameters())
         print(f'Interpretability model parameter count: {interpretability_model_parameter_count}')
-        trainer = AdamTrainer(task, 100, 1000, lr=0.01, device=args.device)
-        train_mi_model(interpretability_model, interpretability_model_io, subject_model, subject_model_io, trainer, task, device=args.device)
+        train_mi_model(interpretability_model, interpretability_model_io, subject_model, subject_model_io, trainer, task, device=args.device, lr=0.001)

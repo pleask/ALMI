@@ -206,6 +206,7 @@ class MultifunctionSubjectModelDataset(Dataset):
 class PositionalEncoding(nn.Module):
     def __init__(self, encoding_length=4, max_len=512):
         super(PositionalEncoding, self).__init__()
+        self.length = encoding_length
         position = torch.arange(0, max_len).unsqueeze(1).float()
         div_term = torch.exp(torch.arange(0, encoding_length, 2).float() * -(torch.log(torch.tensor(10000.0)) / encoding_length))
         pe = torch.zeros(1, max_len, encoding_length)
@@ -225,7 +226,7 @@ class Transformer(nn.Module, MetadataBase):
         self.out_shape = out_shape
         output_size = torch.zeros(out_shape).view(-1).shape[0]
         self.transformer_encoder = nn.TransformerEncoder(
-            nn.TransformerEncoderLayer(d_model=129, nhead=num_heads),
+            nn.TransformerEncoderLayer(d_model=positional_encoding.length + 1, nhead=num_heads),
             num_layers=num_layers
         )
 
@@ -250,7 +251,7 @@ class Transformer(nn.Module, MetadataBase):
 class FeedForwardNN(nn.Module, MetadataBase):
     def __init__(self, in_size, out_size, layer_scale=1):
         super().__init__()
-        self.fc1 = nn.Linear(in_size, int(128*layer_scale))
+        self.fc1 = nn.Linear(in_size, int(self.positional_encoding.length*layer_scale))
         self.relu1 = nn.ReLU()
         self.fc2 = nn.Linear(int(128*layer_scale), int(64*layer_scale))
         self.relu2 = nn.ReLU()
