@@ -15,7 +15,7 @@ TRAIN_RATIO = 0.
 INTERPRETABILITY_BATCH_SIZE = 2**7
 
 # TODO: subject_model can go into the IO class rather than be passed in here
-def train_mi_model(interpretability_model, interpretability_model_io, subject_model, subject_model_io, trainer, task, batch_size=2**7, epochs=100, device='cuda', lr=0.0001, amp=False):
+def train_mi_model(interpretability_model, interpretability_model_io, subject_model, subject_model_io, trainer, task, batch_size=2**7, epochs=100, device='cuda', lr=0.0001, amp=False, grad_accum_steps=1):
     """
     amp: Use automatic mixed precision
     """
@@ -63,6 +63,14 @@ def train_mi_model(interpretability_model, interpretability_model_io, subject_mo
                 scaler.scale(loss).backward()
                 scaler.step(optimizer)
                 scaler.update()
+            elif grad_accum_steps > 1:
+                outputs = interpretability_model(inputs.to(device, non_blocking=True))
+                loss = criterion(outputs, targets.to(device, non_blocking=True))
+                loss.backward()
+
+                if (i + 1) % grad_accum_steps == 0:
+                    optimizer.step()
+                    optimizer.zero_grad()
             else:
                 optimizer.zero_grad()
                 outputs = interpretability_model(inputs.to(device, non_blocking=True))
