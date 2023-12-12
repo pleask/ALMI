@@ -1,19 +1,13 @@
-import json
-import math
-import os
-import tarfile
-import tempfile
 import random
 
 import torch
+from torch.cuda.amp import autocast, GradScaler
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
-from torchvision import transforms
 import wandb
 from tqdm import tqdm
 
-from auto_mi.tasks import TASKS, MI
-from auto_mi.models import SUBJECT_MODELS
+from auto_mi.tasks import MI
 from auto_mi.base import MetadataBase
 from auto_mi.tasks import SimpleFunctionRecoveryTask
 
@@ -21,7 +15,10 @@ TRAIN_RATIO = 0.
 INTERPRETABILITY_BATCH_SIZE = 2**7
 
 # TODO: subject_model can go into the IO class rather than be passed in here
-def train_mi_model(interpretability_model, interpretability_model_io, subject_model, subject_model_io, trainer, task, batch_size=2**7, epochs=100, device='cuda', lr=0.0001):
+def train_mi_model(interpretability_model, interpretability_model_io, subject_model, subject_model_io, trainer, task, batch_size=2**7, epochs=100, device='cuda', lr=0.0001, amp=False):
+    """
+    amp: Use automatic mixed precision
+    """
     all_subject_models, _ = get_matching_subject_models_names(subject_model_io, trainer, task=task)
     if len(all_subject_models) == 0:
         raise ValueError('No subject models found')
@@ -47,16 +44,31 @@ def train_mi_model(interpretability_model, interpretability_model_io, subject_mo
     validation_dataloader = DataLoader(validation_dataset, batch_size=batch_size, shuffle=True)
 
     optimizer = torch.optim.Adam(interpretability_model.parameters(), lr=lr, weight_decay=0.001)
-    criterion = nn.BCELoss()
+    criterion = nn.BCEWithLogitsLoss()
+
+    scaler = None
+    if amp:
+        scaler = GradScaler()
 
     for epoch in tqdm(range(epochs), desc='Interpretability model epochs'):
         interpretability_model.train()
         for i, (inputs, targets) in enumerate(train_dataloader):
-            optimizer.zero_grad()
-            outputs = interpretability_model(inputs.to(device, non_blocking=True))
-            loss = criterion(outputs, targets.to(device, non_blocking=True))
-            loss.backward()
-            optimizer.step()
+            if amp:
+                optimizer.zero_grad()
+
+                with autocast():
+                    outputs = interpretability_model(inputs.to(device, non_blocking=True))
+                    loss = criterion(outputs, targets.to(device, non_blocking=True))
+
+                scaler.scale(loss).backward()
+                scaler.step(optimizer)
+                scaler.update()
+            else:
+                optimizer.zero_grad()
+                outputs = interpretability_model(inputs.to(device, non_blocking=True))
+                loss = criterion(outputs, targets.to(device, non_blocking=True))
+                loss.backward()
+                optimizer.step()
         
             wandb.log({'train_loss': loss})
 
@@ -235,7 +247,6 @@ class Transformer(nn.Module, MetadataBase):
         # Linear layer for classification
         self.global_avg_pooling = nn.AdaptiveAvgPool1d(1)
         self.fc = nn.Linear(subject_model_parameter_count, output_size)
-        self.softmax = nn.Softmax(dim=-1)
         self.positional_encoding = positional_encoding
 
     def forward(self, x):
@@ -247,7 +258,7 @@ class Transformer(nn.Module, MetadataBase):
         output = self.fc(x)
         output = output.view(-1, *self.out_shape)
 
-        return self.softmax(output)
+        return output
 
 
 class FeedForwardNN(nn.Module, MetadataBase):
