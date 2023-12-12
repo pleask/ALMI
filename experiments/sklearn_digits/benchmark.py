@@ -174,6 +174,9 @@ if __name__ == '__main__':
     parser.add_argument("--device", type=str, default="cuda", help="Device to train or evaluate models on")
     parser.add_argument("--subject_model_path", type=str, help="Path of the subject models")
     parser.add_argument("--interpretability_model_path", type=str, help="Path of the interpretability models")
+    parser.add_argument("--interpretability_batch_size", type=int, help="Batch size for interpretability model", default=2**8)
+    parser.add_argument("--interpretability_mixed_precision", action='store_true', help="Use mixed precision (float16) when training interpretability model.")
+    parser.add_argument("--interpretability_gradient_accumulation", type=int, default=1, help="Frequently with which to accumulate gradients when training interpretability model.")
     args = parser.parse_args()
 
     subject_model_io = TarModelWriter(args.subject_model_path)
@@ -207,4 +210,4 @@ if __name__ == '__main__':
         interpretability_model = Transformer(subject_model_parameter_count, task.mi_output_shape, positional_encoding, num_layers=3).to(args.device)
         interpretability_model_parameter_count = sum(p.numel() for p in interpretability_model.parameters())
         print(f'Interpretability model parameter count: {interpretability_model_parameter_count}')
-        train_mi_model(interpretability_model, interpretability_model_io, subject_model, subject_model_io, trainer, task, device=args.device, batch_size=2**7, lr=0.0001)
+        train_mi_model(interpretability_model, interpretability_model_io, subject_model, subject_model_io, trainer, task, device=args.device, batch_size=2**7, amp=args.interpretability_mixed_precision, grad_accum_steps=args.interpretability_gradient_accumulation)
