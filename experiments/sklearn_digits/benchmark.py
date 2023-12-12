@@ -203,7 +203,7 @@ if __name__ == '__main__':
     else:
         wandb.init(project='bounding-mi', entity='patrickaaleask', reinit=True)
 
-        positional_encoding = PositionalEncoding(128, subject_model_parameter_count)
+        positional_encoding = PositionalEncoding(8, subject_model_parameter_count)
         interpretability_model = Transformer(subject_model_parameter_count, task.mi_output_shape, positional_encoding, num_layers=3).to(args.device)
         interpretability_model_parameter_count = sum(p.numel() for p in interpretability_model.parameters())
         print(f'Interpretability model parameter count: {interpretability_model_parameter_count}')
