@@ -23,6 +23,8 @@ INTERPRETABILITY_BATCH_SIZE = 2**7
 # TODO: subject_model can go into the IO class rather than be passed in here
 def train_mi_model(interpretability_model, interpretability_model_io, subject_model, subject_model_io, trainer, task, batch_size=2**7, epochs=100, device='cuda', lr=0.0001):
     all_subject_models, _ = get_matching_subject_models_names(subject_model_io, trainer, task=task)
+    if len(all_subject_models) == 0:
+        raise ValueError('No subject models found')
     wandb.log({'subject_model_count': len(all_subject_models)})
     print(f'Using {len(all_subject_models)} subject models')
     validation_models, train_models  = all_subject_models[:int(0.2*len(all_subject_models))], all_subject_models[int(0.2*len(all_subject_models)):]
