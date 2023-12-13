@@ -250,7 +250,7 @@ class Transformer(nn.Module, MetadataBase):
         self.out_shape = out_shape
         output_size = torch.zeros(out_shape).view(-1).shape[0]
         self.transformer_encoder = nn.TransformerEncoder(
-            nn.TransformerEncoderLayer(d_model=positional_encoding.length + 1, nhead=num_heads),
+            nn.TransformerEncoderLayer(d_model=positional_encoding.length * 2, nhead=num_heads),
             num_layers=num_layers
         )
 
@@ -261,6 +261,7 @@ class Transformer(nn.Module, MetadataBase):
 
     def forward(self, x):
         x = x.unsqueeze(-1)
+        x = x.expand(x.shape[0], x.shape[1], self.positional_encoding.length)
         x = self.positional_encoding(x)
         x = self.transformer_encoder(x)
 

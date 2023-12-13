@@ -64,10 +64,35 @@ class LargeBreastCancerClassifier(nn.Module, MetadataBase):
         return self.softmax(x)
 
 
+class DeepBreastCancerClassifier(nn.Module, MetadataBase):
+    def __init__(self, *_):
+        super().__init__()
+        self.fc1 = nn.Linear(30, 30)
+        self.relu = nn.ReLU()
+        self.fc2 = nn.Linear(30, 30)
+        self.fc3 = nn.Linear(30, 30)
+        self.fc4 = nn.Linear(30, 30)
+        self.fc5 = nn.Linear(30, 2)
+        self.softmax = nn.Softmax(dim=-1)
+
+    def forward(self, x):
+        x = self.fc1(x)
+        x = self.relu(x)
+        x = self.fc2(x)
+        x = self.relu(x)
+        x = self.fc3(x)
+        x = self.relu(x)
+        x = self.fc4(x)
+        x = self.relu(x)
+        x = self.fc5(x)
+        return self.softmax(x)
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Run either pretraining or the full pipeline.')
     parser.add_argument("--evaluate_subject_model", action='store_true', help="Evaluate a subject model.")
     parser.add_argument("--large", action='store_true', help="Use the larger subject model.")
+    parser.add_argument("--deep", action='store_true', help="Use the deeper subject model.")
     parser.add_argument("--train_subject_models", action='store_true', help="Train the subject models.")
     parser.add_argument("--batch_size", type=int, help="Number of subject models to train. 1000 is enough in total.", default=1000)
     parser.add_argument("--seed", type=float, help="Random seed.", default=0.)
@@ -91,6 +116,8 @@ if __name__ == '__main__':
     subject_model = BreastCancerClassifier
     if args.large:
         subject_model = LargeBreastCancerClassifier
+    elif args.deep:
+        subject_model = DeepBreastCancerClassifier
     sample_model = subject_model(task)
     subject_model_parameter_count = sum(p.numel() for p in sample_model.parameters())
     print('Layer parameters')
@@ -110,4 +137,4 @@ if __name__ == '__main__':
         interpretability_model = Transformer(subject_model_parameter_count, task.mi_output_shape, positional_encoding, num_layers=3).to(args.device)
         interpretability_model_parameter_count = sum(p.numel() for p in interpretability_model.parameters())
         print(f'Interpretability model parameter count: {interpretability_model_parameter_count}')
-        train_mi_model(interpretability_model, interpretability_model_io, subject_model, subject_model_io, trainer, task, device=args.device, batch_size=2**8)
+        train_mi_model(interpretability_model, interpretability_model_io, subject_model, subject_model_io, trainer, task, device=args.device, batch_size=2**5, grad_accum_steps=8)

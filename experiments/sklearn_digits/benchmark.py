@@ -116,6 +116,7 @@ class DigitsClassifier(nn.Module, MetadataBase):
         return F.log_softmax(x, dim=1)
 
 
+
 def evaluate(subject_model_io):
     metadata = subject_model_io.get_metadata()[:100]
     accuracies = []
@@ -145,7 +146,6 @@ if __name__ == '__main__':
     mp.set_start_method('spawn')
     parser = argparse.ArgumentParser(description='Run either pretraining or the full pipeline.')
     parser.add_argument("--evaluate_subject_model", action='store_true', help="Evaluate a subject model.")
-    parser.add_argument("--linear", action='store_true', help="Use the linear model classifier rather than the convolutional one.")
     parser.add_argument("--train_subject_models", action='store_true', help="Train the subject models.")
     parser.add_argument("--batch_size", type=int, help="Number of subject models to train", default=100)
     parser.add_argument("--overfit", action='store_true', help='Overfit the subject models to the data (ie. make the subject models big)')
@@ -185,8 +185,8 @@ if __name__ == '__main__':
     else:
         wandb.init(project='bounding-mi', entity='patrickaaleask', reinit=True)
 
-        positional_encoding = PositionalEncoding(16, subject_model_parameter_count)
-        interpretability_model = Transformer(subject_model_parameter_count, task.mi_output_shape, positional_encoding, num_layers=12).to(args.device)
+        positional_encoding = PositionalEncoding(64, subject_model_parameter_count)
+        interpretability_model = Transformer(subject_model_parameter_count, task.mi_output_shape, positional_encoding, num_layers=6, num_heads=8).to(args.device)
         interpretability_model_parameter_count = sum(p.numel() for p in interpretability_model.parameters())
         print(f'Interpretability model parameter count: {interpretability_model_parameter_count}')
         train_mi_model(interpretability_model, interpretability_model_io, subject_model_class, subject_model_io, trainer, task, device=args.device, batch_size=args.batch_size, amp=args.interpretability_mixed_precision, grad_accum_steps=args.interpretability_gradient_accumulation, lr=0.00001)
