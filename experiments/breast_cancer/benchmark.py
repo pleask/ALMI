@@ -49,6 +49,21 @@ class BreastCancerClassifier(nn.Module, MetadataBase):
         return self.softmax(x)
 
 
+class LargeBreastCancerClassifier(nn.Module, MetadataBase):
+    def __init__(self, *_):
+        super().__init__()
+        self.fc1 = nn.Linear(30, 180)
+        self.relu = nn.ReLU()
+        self.fc2 = nn.Linear(180, 2)
+        self.softmax = nn.Softmax(dim=-1)
+
+    def forward(self, x):
+        x = self.fc1(x)
+        x = self.relu(x)
+        x = self.fc2(x)
+        return self.softmax(x)
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Run either pretraining or the full pipeline.')
     parser.add_argument("--evaluate_subject_model", action='store_true', help="Evaluate a subject model.")

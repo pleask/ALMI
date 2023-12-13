@@ -17,7 +17,7 @@ from auto_mi.base import MetadataBase
 from auto_mi.rl import pretrain_subject_models
 from auto_mi.tasks import Task, Example, TRAIN, VAL, MI
 from auto_mi.trainers import AdamTrainer
-from auto_mi.utils import DirModelWriter, TarModelWriter
+from auto_mi.utils import DirModelWriter, TarModelWriter, evaluate_subject_model
 from auto_mi.mi import Transformer, train_mi_model, PositionalEncoding
 
 
@@ -139,34 +139,13 @@ def evaluate(subject_model_io):
         print(accuracy)
         accuracies.append(accuracy)
     print(sum(accuracies)/ len(accuracies))
-    
-            
-class FFNN(nn.Module, MetadataBase):
-    def __init__(self, in_size, out_shape, layer_scale=5):
-        super().__init__()
-        self.out_shape = out_shape
-        out_size = torch.zeros(out_shape).view(-1).shape[0]
-        self.fc1 = nn.Linear(in_size, int(64*layer_scale))
-        self.relu1 = nn.ReLU()
-        self.fc2 = nn.Linear(int(64*layer_scale), int(32*layer_scale))
-        self.relu2 = nn.ReLU()
-        self.fc3 = nn.Linear(int(32*layer_scale), out_size)
-        self.softmax = nn.Softmax(dim=-1)
-
-    def forward(self, x):
-        x = self.fc1(x)
-        x = self.relu1(x)
-        x = self.fc2(x)
-        x = self.relu2(x)
-        x = self.fc3(x)
-        x = x.view(-1, *self.out_shape)
-        return self.softmax(x)
 
 
 if __name__ == '__main__':
     mp.set_start_method('spawn')
     parser = argparse.ArgumentParser(description='Run either pretraining or the full pipeline.')
     parser.add_argument("--evaluate_subject_model", action='store_true', help="Evaluate a subject model.")
+    parser.add_argument("--linear", action='store_true', help="Use the linear model classifier rather than the convolutional one.")
     parser.add_argument("--train_subject_models", action='store_true', help="Train the subject models.")
     parser.add_argument("--batch_size", type=int, help="Number of subject models to train", default=100)
     parser.add_argument("--overfit", action='store_true', help='Overfit the subject models to the data (ie. make the subject models big)')
@@ -182,16 +161,16 @@ if __name__ == '__main__':
     subject_model_io = TarModelWriter(args.subject_model_path)
     interpretability_model_io = DirModelWriter(args.interpretability_model_path)
 
+    subject_model_class = DigitsClassifier
     if args.evaluate_subject_model:
-        evaluate(subject_model_io)
+        evaluate_subject_model(PermutedDigitsTask, subject_model_class, subject_model_io)
         quit()
 
     task = PermutedDigitsTask(args.seed)
     epochs = 100
     trainer = AdamTrainer(task, epochs, 1000, lr=0.01, device=args.device)
 
-    subject_model = DigitsClassifier
-    sample_model = subject_model(task)
+    sample_model = subject_model_class(task)
     subject_model_parameter_count = sum(p.numel() for p in sample_model.parameters())
     print('Layer parameters')
     print(f'Subject model parameter count: {subject_model_parameter_count}', flush=True)
@@ -202,12 +181,12 @@ if __name__ == '__main__':
 
         print('Pretraining subject models')
         trainer = random.choice(state_space)
-        pretrain_subject_models(trainer, subject_model_io, subject_model, task, batch_size=args.batch_size)
+        pretrain_subject_models(trainer, subject_model_io, subject_model_class, task, batch_size=args.batch_size)
     else:
         wandb.init(project='bounding-mi', entity='patrickaaleask', reinit=True)
 
-        positional_encoding = PositionalEncoding(8, subject_model_parameter_count)
-        interpretability_model = Transformer(subject_model_parameter_count, task.mi_output_shape, positional_encoding, num_layers=6).to(args.device)
+        positional_encoding = PositionalEncoding(16, subject_model_parameter_count)
+        interpretability_model = Transformer(subject_model_parameter_count, task.mi_output_shape, positional_encoding, num_layers=12).to(args.device)
         interpretability_model_parameter_count = sum(p.numel() for p in interpretability_model.parameters())
         print(f'Interpretability model parameter count: {interpretability_model_parameter_count}')
-        train_mi_model(interpretability_model, interpretability_model_io, subject_model, subject_model_io, trainer, task, device=args.device, batch_size=args.batch_size, amp=args.interpretability_mixed_precision, grad_accum_steps=args.interpretability_gradient_accumulation)
+        train_mi_model(interpretability_model, interpretability_model_io, subject_model_class, subject_model_io, trainer, task, device=args.device, batch_size=args.batch_size, amp=args.interpretability_mixed_precision, grad_accum_steps=args.interpretability_gradient_accumulation, lr=0.00001)
