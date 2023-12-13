@@ -67,6 +67,7 @@ class LargeBreastCancerClassifier(nn.Module, MetadataBase):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Run either pretraining or the full pipeline.')
     parser.add_argument("--evaluate_subject_model", action='store_true', help="Evaluate a subject model.")
+    parser.add_argument("--large", action='store_true', help="Use the larger subject model.")
     parser.add_argument("--train_subject_models", action='store_true', help="Train the subject models.")
     parser.add_argument("--batch_size", type=int, help="Number of subject models to train. 1000 is enough in total.", default=1000)
     parser.add_argument("--seed", type=float, help="Random seed.", default=0.)
@@ -88,6 +89,8 @@ if __name__ == '__main__':
     trainer = AdamTrainer(task, epochs, 1000, lr=0.01, device=args.device)
 
     subject_model = BreastCancerClassifier
+    if args.large:
+        subject_model = LargeBreastCancerClassifier
     sample_model = subject_model(task)
     subject_model_parameter_count = sum(p.numel() for p in sample_model.parameters())
     print('Layer parameters')
