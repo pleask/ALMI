@@ -44,7 +44,7 @@ def train_mi_model(interpretability_model, interpretability_model_io, subject_mo
     validation_dataloader = DataLoader(validation_dataset, batch_size=batch_size, shuffle=True)
 
     optimizer = torch.optim.Adam(interpretability_model.parameters(), lr=lr, weight_decay=0.001)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=10, factor=0.1, verbose=True)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=100, factor=0.1, verbose=True)
     criterion = nn.BCEWithLogitsLoss()
 
     scaler = None
