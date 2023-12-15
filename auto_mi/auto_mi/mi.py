@@ -11,20 +11,23 @@ from auto_mi.tasks import MI
 from auto_mi.base import MetadataBase
 from auto_mi.tasks import SimpleFunctionRecoveryTask
 
-TRAIN_RATIO = 0.
+VAL_RATIO = 0.8
+TRAIN_RATIO = 0.8
 INTERPRETABILITY_BATCH_SIZE = 2**7
 
 # TODO: subject_model can go into the IO class rather than be passed in here
-def train_mi_model(interpretability_model, interpretability_model_io, subject_model, subject_model_io, trainer, task, batch_size=2**7, epochs=100, device='cuda', lr=0.001, amp=False, grad_accum_steps=1):
+def train_mi_model(interpretability_model, interpretability_model_io, subject_model, subject_model_io, trainer, task, batch_size=2**7, epochs=100, device='cuda', lr=0.001, amp=False, grad_accum_steps=1, subject_model_count=-1):
     """
     amp: Use automatic mixed precision
     """
     all_subject_models, _ = get_matching_subject_models_names(subject_model_io, trainer, task=task)
+    if subject_model_count > 0:
+        all_subject_models = all_subject_models[:subject_model_count]
     if len(all_subject_models) == 0:
         raise ValueError('No subject models found')
     wandb.log({'subject_model_count': len(all_subject_models)})
     print(f'Using {len(all_subject_models)} subject models')
-    validation_models, train_models  = all_subject_models[:int(0.2*len(all_subject_models))], all_subject_models[int(0.2*len(all_subject_models)):]
+    validation_models, train_models  = all_subject_models[:int(VAL_RATIO*len(all_subject_models))], all_subject_models[int(VAL_RATIO*len(all_subject_models)):]
 
     untransformed_dataset = MultifunctionSubjectModelDataset(subject_model_io, train_models, task, subject_model)
     mean = 0.
@@ -217,7 +220,7 @@ class MultifunctionSubjectModelDataset(Dataset):
         x = torch.concat(
             [param.detach().reshape(-1) for _, param in model.named_parameters()]
         )
-        x = (x - self.mean) / self.std
+        # x = (x - self.mean) / self.std
 
         return x, y
 
@@ -249,7 +252,7 @@ class PositionalEncoding(nn.Module):
     def forward(self, x):
         pe = torch.cat([self.position_weights[:x.size(1), :], self.position_biases[:x.size(1), :]], dim=1).unsqueeze(0)
         pe = pe.expand(x.shape[0], -1, -1)
-        return x + pe
+        return torch.cat([x, pe], dim =-1)
 
 
 class Transformer(nn.Module, MetadataBase):
@@ -259,11 +262,11 @@ class Transformer(nn.Module, MetadataBase):
         output_size = torch.zeros(out_shape).view(-1).shape[0]
         self.positional_encoding = PositionalEncoding(64, subject_model_parameter_count)
 
-        encoder_layer = nn.TransformerEncoderLayer(d_model=self.positional_encoding.length, nhead=num_heads, dim_feedforward=2048)
+        encoder_layer = nn.TransformerEncoderLayer(d_model=self.positional_encoding.length * 2, nhead=num_heads, dim_feedforward=2048)
         self.transformer_encoder = nn.TransformerEncoder(
             encoder_layer,
             num_layers=num_layers,
-            norm=nn.LayerNorm(self.positional_encoding.length),
+            norm=nn.LayerNorm(self.positional_encoding.length * 2),
         )
 
         # Linear layer for classification

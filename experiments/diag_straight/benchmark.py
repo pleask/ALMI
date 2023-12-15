@@ -37,16 +37,21 @@ def get_item(i):
     arr = np.zeros((4, 4))
     # Make sure we get numbers from 0 to 8
 
-    for i in range(4):
+    count = 0
+    for i in range(2):
         straight_or_diag = r.choice(OPTIONS)
         symbol = None
         if straight_or_diag == DIAG:
             symbol = r.choice(diagonal)
-            label = 0
+            count += 1
         else:
             symbol = r.choice(straight)
-            label = 1
-        arr = np.kron(symbol, np.ones((2, 2)))
+            count -= 1
+        arr[i%2*2:i%2*2 + 2] = np.kron(symbol, np.ones((1, 2)))
+    if count == 0:
+        label = 0
+    else:
+        label = 1
     return arr, label
 
 
@@ -61,7 +66,7 @@ class DiagStraightExample(SimpleExample):
 
     def _get_dataset(self):
         X, Y = [], []
-        for i in range(100):
+        for i in range(10000):
             x, y = get_item(i)
             X.append(x)
             Y.append(y)
@@ -70,16 +75,16 @@ class DiagStraightExample(SimpleExample):
 
 
 class DiagStraightClassifier(nn.Module, MetadataBase):
-    def __init__(self, *_):
+    def __init__(self,  *_, num_classes=2):
         super().__init__()
-        self.conv1 = nn.Conv2d(1, 20, kernel_size=2)
-        self.fc1 = nn.Linear(20, 30)
-        self.fc2 = nn.Linear(30, 2)
+        self.conv1 = nn.Conv2d(1, 10, kernel_size=2)
+        self.fc1 = nn.Linear(90, 20)
+        self.fc2 = nn.Linear(20, num_classes)
 
     def forward(self, x):
         x = x.unsqueeze(1)
-        x = F.relu(F.max_pool2d(self.conv1(x), 2))
-        x = x.view(-1, 20)
+        x = F.relu(self.conv1(x), 2)
+        x = x.view(len(x), -1)
         x = F.relu(self.fc1(x))
         x = self.fc2(x)
         return F.log_softmax(x, dim=1)
@@ -116,6 +121,7 @@ if __name__ == '__main__':
     parser.add_argument("--interpretability_batch_size", type=int, help="Batch size for interpretability model", default=2**8)
     parser.add_argument("--interpretability_mixed_precision", action='store_true', help="Use mixed precision (float16) when training interpretability model.")
     parser.add_argument("--interpretability_gradient_accumulation", type=int, default=1, help="Frequently with which to accumulate gradients when training interpretability model.")
+    parser.add_argument("--interpretability_subject_model_count", type=int, default=-1, help="How many subject models to use.")
     args = parser.parse_args()
 
     subject_model_io = DirModelWriter(args.subject_model_path)
@@ -127,7 +133,7 @@ if __name__ == '__main__':
         quit()
 
     task = DiagStraightTask(args.seed)
-    epochs = 300
+    epochs = 100
     trainer = AdamTrainer(task, epochs, 1000, lr=0.01, device=args.device)
 
     sample_model = subject_model_class(task)
@@ -145,7 +151,7 @@ if __name__ == '__main__':
     else:
         wandb.init(project='bounding-mi', entity='patrickaaleask', reinit=True)
 
-        interpretability_model = Transformer(subject_model_parameter_count, task.mi_output_shape, num_layers=12, num_heads=16).to(args.device)
+        interpretability_model = Transformer(subject_model_parameter_count, task.mi_output_shape, num_layers=1, num_heads=1).to(args.device)
         interpretability_model_parameter_count = sum(p.numel() for p in interpretability_model.parameters())
         print(f'Interpretability model parameter count: {interpretability_model_parameter_count}')
-        train_mi_model(interpretability_model, interpretability_model_io, subject_model_class, subject_model_io, trainer, task, device=args.device, batch_size=args.batch_size, amp=args.interpretability_mixed_precision, grad_accum_steps=args.interpretability_gradient_accumulation)
+        train_mi_model(interpretability_model, interpretability_model_io, subject_model_class, subject_model_io, trainer, task, device=args.device, batch_size=args.batch_size, amp=args.interpretability_mixed_precision, grad_accum_steps=args.interpretability_gradient_accumulation, subject_model_count=args.interpretability_subject_model_count)
