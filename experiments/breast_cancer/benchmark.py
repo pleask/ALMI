@@ -9,17 +9,17 @@ import wandb
 from auto_mi.base import MetadataBase
 from auto_mi.mi import PositionalEncoding, Transformer, train_mi_model
 from auto_mi.rl import pretrain_subject_models
-from auto_mi.sklearn import SklearnExample, SklearnTask
+from auto_mi.sklearn import SimpleExample, SimpleTask
 from auto_mi.tasks import TRAIN, VAL
 from auto_mi.trainers import AdamTrainer
 from auto_mi.utils import DirModelWriter, TarModelWriter, evaluate_subject_model
 
-class PermutedBreastCancerTask(SklearnTask):
+class PermutedBreastCancerTask(SimpleTask):
     def __init__(self, seed=0., train=True, **kwargs):
         super().__init__(PermutedBreastCancerExample, (30,), 2, seed=seed, train=train)
 
 
-class PermutedBreastCancerExample(SklearnExample):
+class PermutedBreastCancerExample(SimpleExample):
     def __init__(self, permutation_map, type=TRAIN):
         super().__init__(permutation_map, type)
     

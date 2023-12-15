@@ -15,7 +15,7 @@ TRAIN_RATIO = 0.
 INTERPRETABILITY_BATCH_SIZE = 2**7
 
 # TODO: subject_model can go into the IO class rather than be passed in here
-def train_mi_model(interpretability_model, interpretability_model_io, subject_model, subject_model_io, trainer, task, batch_size=2**7, epochs=100, device='cuda', lr=0.0001, amp=False, grad_accum_steps=1):
+def train_mi_model(interpretability_model, interpretability_model_io, subject_model, subject_model_io, trainer, task, batch_size=2**7, epochs=100, device='cuda', lr=0.001, amp=False, grad_accum_steps=1):
     """
     amp: Use automatic mixed precision
     """
@@ -44,11 +44,15 @@ def train_mi_model(interpretability_model, interpretability_model_io, subject_mo
     validation_dataloader = DataLoader(validation_dataset, batch_size=batch_size, shuffle=True)
 
     optimizer = torch.optim.Adam(interpretability_model.parameters(), lr=lr, weight_decay=0.001)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=10, factor=0.1, verbose=True)
     criterion = nn.BCEWithLogitsLoss()
 
     scaler = None
     if amp:
         scaler = GradScaler()
+
+    if grad_accum_steps > 1:
+        total_loss = 0.
 
     for epoch in tqdm(range(epochs), desc='Interpretability model epochs'):
         interpretability_model.train()
@@ -63,23 +67,28 @@ def train_mi_model(interpretability_model, interpretability_model_io, subject_mo
 
                 scaler.scale(loss).backward()
                 scaler.step(optimizer)
+                scheduler.step(loss)
                 scaler.update()
                 wandb.log({'train_loss': loss})
             elif grad_accum_steps > 1:
                 outputs = interpretability_model(inputs.to(device, non_blocking=True))
                 loss = criterion(outputs, targets.to(device, non_blocking=True))
                 loss.backward()
+                total_loss += loss
                 wandb.log({'train_loss': loss.detach().cpu()})
 
                 if (i + 1) % grad_accum_steps == 0:
                     optimizer.step()
+                    scheduler.step(total_loss)
                     optimizer.zero_grad()
+                    total_loss = 0.
             else:
                 optimizer.zero_grad()
                 outputs = interpretability_model(inputs.to(device, non_blocking=True))
                 loss = criterion(outputs, targets.to(device, non_blocking=True))
                 loss.backward()
                 optimizer.step()
+                scheduler.step(loss)
                 wandb.log({'train_loss': loss})
 
         interpretability_model.eval()
@@ -233,31 +242,33 @@ class PositionalEncoding(nn.Module):
         self.length = encoding_length
         position = torch.arange(0, max_len).unsqueeze(1).float()
         div_term = torch.exp(torch.arange(0, encoding_length, 2).float() * -(torch.log(torch.tensor(10000.0)) / encoding_length))
-        pe = torch.zeros(1, max_len, encoding_length)
-        pe[:, :, 0::2] = torch.sin(position * div_term)
-        pe[:, :, 1::2] = torch.cos(position * div_term)
-        self.register_buffer('pe', pe)
+
+        self.position_weights = nn.Parameter(torch.sin(position * div_term), requires_grad=True)
+        self.position_biases = nn.Parameter(torch.cos(position * div_term), requires_grad=True)
 
     def forward(self, x):
-        pe = self.pe[:, :x.size(1), :].expand(x.shape[0], -1, -1)
-        x = torch.cat([x, pe], dim=2)
-        return x
+        pe = torch.cat([self.position_weights[:x.size(1), :], self.position_biases[:x.size(1), :]], dim=1).unsqueeze(0)
+        pe = pe.expand(x.shape[0], -1, -1)
+        return x + pe
 
 
 class Transformer(nn.Module, MetadataBase):
-    def __init__(self, subject_model_parameter_count, out_shape, positional_encoding, num_layers=6, num_heads=1):
+    def __init__(self, subject_model_parameter_count, out_shape, num_layers=6, num_heads=1):
         super().__init__()
         self.out_shape = out_shape
         output_size = torch.zeros(out_shape).view(-1).shape[0]
+        self.positional_encoding = PositionalEncoding(64, subject_model_parameter_count)
+
+        encoder_layer = nn.TransformerEncoderLayer(d_model=self.positional_encoding.length, nhead=num_heads, dim_feedforward=2048)
         self.transformer_encoder = nn.TransformerEncoder(
-            nn.TransformerEncoderLayer(d_model=positional_encoding.length * 2, nhead=num_heads),
-            num_layers=num_layers
+            encoder_layer,
+            num_layers=num_layers,
+            norm=nn.LayerNorm(self.positional_encoding.length),
         )
 
         # Linear layer for classification
         self.global_avg_pooling = nn.AdaptiveAvgPool1d(1)
         self.fc = nn.Linear(subject_model_parameter_count, output_size)
-        self.positional_encoding = positional_encoding
 
     def forward(self, x):
         x = x.unsqueeze(-1)
@@ -269,6 +280,23 @@ class Transformer(nn.Module, MetadataBase):
         output = self.fc(x)
         output = output.view(-1, *self.out_shape)
 
+        return output
+
+
+class LSTMClassifier(nn.Module):
+    def __init__(self, subject_model_parameter_count, out_shape, hidden_size=2048):
+        super(LSTMClassifier, self).__init__()
+        self.out_shape = out_shape
+        output_size = torch.zeros(out_shape).view(-1).shape[0]
+        self.lstm = nn.LSTM(subject_model_parameter_count, hidden_size, batch_first=True, num_layers=3)
+        self.fc = nn.Linear(hidden_size, output_size)
+        self.softmax = nn.Softmax(dim=1)
+
+    def forward(self, x):
+        x = x.unsqueeze(-1)
+        lstm_out, _ = self.lstm(x)
+        output = self.fc(lstm_out[:, -1, :])
+        output = output.view(-1, *self.out_shape)
         return output
 
 

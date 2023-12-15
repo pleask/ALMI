@@ -210,10 +210,10 @@ def get_args_for_slum():
     return args
 
 
-def evaluate_subject_model(task_class, subject_model_class, subject_model_io, samples=100):
+def evaluate_subject_model(task_class, subject_model_class, subject_model_io, samples=100, model_count=100):
     metadata = subject_model_io.get_metadata()
     accuracies = []
-    for model_idx in range(len(metadata)):
+    for model_idx in range(min(model_count, len(metadata))):
         print(f'Model {model_idx}')
         task = task_class(seed=metadata[model_idx]['task']['seed'])
         example = task.get_dataset(metadata[model_idx]['index'], type=VAL)
@@ -221,13 +221,11 @@ def evaluate_subject_model(task_class, subject_model_class, subject_model_io, sa
         permutation_map = metadata[model_idx]['example']['permutation_map']
         print(f"Permutation map: {permutation_map}")
         model = subject_model_io.get_model(subject_model_class(), model_id)
-        
         correct = []
         for _ in range(samples):
             i = random.randint(0, len(example)-1)
             input, label = example[i]
             prediction = model(torch.Tensor(input).unsqueeze(0))
-            # print(label, torch.argmax(prediction, -1).item())
             correct.append((torch.argmax(prediction, -1) == label)[0].item())
         accuracy = sum(correct) /  samples
         print(accuracy)

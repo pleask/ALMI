@@ -8,7 +8,7 @@ import torch.nn.functional as F
 
 from auto_mi.tasks import Task, Example, TRAIN, VAL
 
-class SklearnTask(Task):
+class SimpleTask(Task):
     def __init__(self, example_class, input_shape, num_classes, seed=0., train=True, **kwargs):
         super().__init__(seed=seed, train=train)
         self._input_shape = input_shape
@@ -35,7 +35,7 @@ class SklearnTask(Task):
         return F.nll_loss(x, y)
 
 
-class SklearnExample(Example, ABC):
+class SimpleExample(Example, ABC):
     def __init__(self, permutation_map, type=TRAIN):
         self._permutation_map = permutation_map
 

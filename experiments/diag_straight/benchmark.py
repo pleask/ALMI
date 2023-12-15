@@ -1,18 +1,15 @@
 import argparse
-from itertools import permutations
+from random import Random
 import random
 
+import matplotlib.pyplot as plt
 import numpy as np
-from sklearn import datasets
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
-import torch
-import torch.multiprocessing as mp
-import torch.nn.functional as F
 import torch.nn as nn
-from torch.utils.data import Dataset
+import torch.nn.functional as F
+import torch.multiprocessing as mp
 import wandb
 
+from auto_mi.sklearn import SimpleExample, SimpleTask
 from auto_mi.base import MetadataBase
 from auto_mi.rl import pretrain_subject_models
 from auto_mi.tasks import Task, Example, TRAIN, VAL, MI
@@ -21,99 +18,87 @@ from auto_mi.utils import DirModelWriter, TarModelWriter, evaluate_subject_model
 from auto_mi.mi import Transformer, train_mi_model, PositionalEncoding, LSTMClassifier
 
 
-TRAIN_RATIO = 0.7
+diagonal = [
+    np.array([[1., 0.], [0., 1.]]),
+    np.array([[0., 1.], [1., 0.]]),
+]
+straight = [
+    np.array([[1., 1.], [0., 0.]]),
+    np.array([[0., 0.], [1., 1.]]),
+    np.array([[1., 0.], [1., 0.]]),
+    np.array([[0., 1.], [0., 1.]]),
+]
+DIAG = 'diagonal'
+STR = 'straight'
+OPTIONS = [DIAG, STR]
 
+def get_item(i):
+    r = Random(i)
+    arr = np.zeros((4, 4))
+    # Make sure we get numbers from 0 to 8
 
-# TODO: commonise with other sklearn tasks
-class PermutedDigitsTask(Task):
-    def __init__(self, seed=0., train=True, **kwargs):
-        super().__init__(seed=seed, train=train)
-        p = list(permutations(range(10)))
-        # Shuffle the permutations so we see examples where all output classes
-        # are remapped.
-        r = random.Random(seed)
-        r.shuffle(p)
-        self._permutations = p
-
-    def get_dataset(self, i, type=TRAIN, **_) -> Dataset:
-        """
-        Gets the dataset for the ith example of this task.
-        """
-        return PermutedDigitsExample(self._permutations[i % len(self._permutations)], type=type)
-
-    @property
-    def input_shape(self):
-        return (8, 8,)
-
-    @property
-    def output_shape(self):
-        return (10, )
-
-    @property
-    def mi_output_shape(self):
-        return (10, 10)
-
-    def criterion(self, x, y):
-        return F.nll_loss(x, y)
-
-
-# TODO: Commonise this with the iris code (same for models)
-class PermutedDigitsExample(Example):
-    def __init__(self, permutation_map, type=TRAIN):
-        self._permutation_map = permutation_map
-
-        if type==MI:
-            return
-
-        digits_dataset = datasets.load_digits()
-        X = digits_dataset.data
-        y = digits_dataset.target
-
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
-        scaler = StandardScaler()
-        X_train = scaler.fit_transform(X_train)
-        X_test = scaler.transform(X_test)
-
-
-        if type == TRAIN:
-            self.X = X_train
-            self.y = y_train
+    for i in range(4):
+        straight_or_diag = r.choice(OPTIONS)
+        symbol = None
+        if straight_or_diag == DIAG:
+            symbol = r.choice(diagonal)
+            label = 0
         else:
-            self.X = X_test
-            self.y = y_test
-
-    def __getitem__(self, i):
-        x = self.X[i].astype(np.float32)
-        y = self.y[i]
-        return x.reshape((8, 8)), self._permutation_map[y]
-
-    def __len__(self):
-        return len(self.X)
-
-    def get_metadata(self):
-        return {'permutation_map': self._permutation_map}
-    
-    def get_target(self):
-        return F.one_hot(torch.tensor(self._permutation_map)).to(torch.float32)
+            symbol = r.choice(straight)
+            label = 1
+        arr = np.kron(symbol, np.ones((2, 2)))
+    return arr, label
 
 
-class DigitsClassifier(nn.Module, MetadataBase):
+class DiagStraightTask(SimpleTask):
+    def __init__(self, seed=0., train=True, **kwargs):
+        super().__init__(DiagStraightExample, (4, 4), 2, seed=seed, train=train)
+
+
+class DiagStraightExample(SimpleExample):
+    def __init__(self, permutation_map, type=TRAIN, **kwargs):
+        super().__init__(permutation_map, type)
+
+    def _get_dataset(self):
+        X, Y = [], []
+        for i in range(100):
+            x, y = get_item(i)
+            X.append(x)
+            Y.append(y)
+
+        return X, Y 
+
+
+class DiagStraightClassifier(nn.Module, MetadataBase):
     def __init__(self, *_):
         super().__init__()
-        self.conv1 = nn.Conv2d(1, 20, kernel_size=3, padding=1)
-        self.conv2 = nn.Conv2d(20, 20, kernel_size=3, padding=1)
-        self.fc1 = nn.Linear(20 * 2 * 2, 30)
-        self.fc2 = nn.Linear(30, 10)
+        self.conv1 = nn.Conv2d(1, 20, kernel_size=2)
+        self.fc1 = nn.Linear(20, 30)
+        self.fc2 = nn.Linear(30, 2)
 
     def forward(self, x):
         x = x.unsqueeze(1)
         x = F.relu(F.max_pool2d(self.conv1(x), 2))
-        x = F.relu(F.max_pool2d(self.conv2(x), 2))
-        x = x.view(-1, 20 * 2 * 2)
+        x = x.view(-1, 20)
         x = F.relu(self.fc1(x))
         x = self.fc2(x)
         return F.log_softmax(x, dim=1)
+
+
+class LinearDiagStraightClassifier(nn.Module, MetadataBase):
+    def __init__(self, *_):
+        super().__init__()
+        self.fc1 = nn.Linear(16, 30)
+        self.relu = nn.ReLU()
+        self.fc2 = nn.Linear(30, 2)
+        self.softmax = nn.Softmax(dim=-1)
+
+    def forward(self, x):
+        x = x.flatten(len(x), -1)
+        x = self.fc1(x)
+        x = self.relu(x)
+        x = self.fc2(x)
+        return self.softmax(x)
 
 
 if __name__ == '__main__':
@@ -122,6 +107,7 @@ if __name__ == '__main__':
     parser.add_argument("--evaluate_subject_model", action='store_true', help="Evaluate a subject model.")
     parser.add_argument("--train_subject_models", action='store_true', help="Train the subject models.")
     parser.add_argument("--batch_size", type=int, help="Number of subject models to train", default=100)
+    parser.add_argument("--linear", action='store_true', help="Use the linear model instead of the convolutional model.")
     parser.add_argument("--overfit", action='store_true', help='Overfit the subject models to the data (ie. make the subject models big)')
     parser.add_argument("--seed", type=float, help="Random seed.", default=0.)
     parser.add_argument("--device", type=str, default="cuda", help="Device to train or evaluate models on")
@@ -132,16 +118,16 @@ if __name__ == '__main__':
     parser.add_argument("--interpretability_gradient_accumulation", type=int, default=1, help="Frequently with which to accumulate gradients when training interpretability model.")
     args = parser.parse_args()
 
-    subject_model_io = TarModelWriter(args.subject_model_path)
+    subject_model_io = DirModelWriter(args.subject_model_path)
     interpretability_model_io = DirModelWriter(args.interpretability_model_path)
 
-    subject_model_class = DigitsClassifier
+    subject_model_class = DiagStraightClassifier
     if args.evaluate_subject_model:
-        evaluate_subject_model(PermutedDigitsTask, subject_model_class, subject_model_io)
+        evaluate_subject_model(DiagStraightTask, subject_model_class, subject_model_io)
         quit()
 
-    task = PermutedDigitsTask(args.seed)
-    epochs = 100
+    task = DiagStraightTask(args.seed)
+    epochs = 300
     trainer = AdamTrainer(task, epochs, 1000, lr=0.01, device=args.device)
 
     sample_model = subject_model_class(task)
@@ -159,7 +145,7 @@ if __name__ == '__main__':
     else:
         wandb.init(project='bounding-mi', entity='patrickaaleask', reinit=True)
 
-        interpretability_model = Transformer(subject_model_parameter_count, task.mi_output_shape, num_layers=6, num_heads=8).to(args.device)
+        interpretability_model = Transformer(subject_model_parameter_count, task.mi_output_shape, num_layers=3, num_heads=2).to(args.device)
         interpretability_model_parameter_count = sum(p.numel() for p in interpretability_model.parameters())
         print(f'Interpretability model parameter count: {interpretability_model_parameter_count}')
         train_mi_model(interpretability_model, interpretability_model_io, subject_model_class, subject_model_io, trainer, task, device=args.device, batch_size=args.batch_size, amp=args.interpretability_mixed_precision, grad_accum_steps=args.interpretability_gradient_accumulation)

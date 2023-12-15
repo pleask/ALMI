@@ -14,15 +14,15 @@ from auto_mi.tasks import TRAIN, VAL
 from auto_mi.trainers import AdamTrainer
 from auto_mi.utils import DirModelWriter, TarModelWriter
 from auto_mi.mi import PositionalEncoding, Transformer, train_mi_model
-from auto_mi.sklearn import SklearnExample, SklearnTask
+from auto_mi.sklearn import SimpleExample, SimpleTask
 
 
-class PermutedIrisTask(SklearnTask):
+class PermutedIrisTask(SimpleTask):
     def __init__(self, seed=0., train=True, **kwargs):
         super().__init__(PermutedIrisExample, (4,), 3, seed=seed, train=train)
 
 
-class PermutedIrisExample(SklearnExample):
+class PermutedIrisExample(SimpleExample):
     def __init__(self, permutation_map, type=TRAIN):
         super().__init__(permutation_map, type)
 
