@@ -11,12 +11,12 @@ from auto_mi.tasks import MI
 from auto_mi.base import MetadataBase
 from auto_mi.tasks import SimpleFunctionRecoveryTask
 
-VAL_RATIO = 0.8
+VAL_RATIO = 0.2
 TRAIN_RATIO = 0.8
 INTERPRETABILITY_BATCH_SIZE = 2**7
 
 # TODO: subject_model can go into the IO class rather than be passed in here
-def train_mi_model(interpretability_model, interpretability_model_io, subject_model, subject_model_io, trainer, task, batch_size=2**7, epochs=100, device='cuda', lr=0.001, amp=False, grad_accum_steps=1, subject_model_count=-1):
+def train_mi_model(interpretability_model, interpretability_model_io, subject_model, subject_model_io, trainer, task, batch_size=2**7, epochs=100, device='cuda', lr=1e-5, amp=False, grad_accum_steps=1, subject_model_count=-1):
     """
     amp: Use automatic mixed precision
     """
@@ -29,22 +29,10 @@ def train_mi_model(interpretability_model, interpretability_model_io, subject_mo
     print(f'Using {len(all_subject_models)} subject models')
     validation_models, train_models  = all_subject_models[:int(VAL_RATIO*len(all_subject_models))], all_subject_models[int(VAL_RATIO*len(all_subject_models)):]
 
-    untransformed_dataset = MultifunctionSubjectModelDataset(subject_model_io, train_models, task, subject_model)
-    mean = 0.
-    std = 0.
-    samples = 0
-    for data in untransformed_dataset:
-        model = data[0]
-        mean += model.mean()
-        std += model.std()
-        samples += 1
-    mean = mean / samples
-    std = std / samples
-    
-    train_dataset = MultifunctionSubjectModelDataset(subject_model_io, train_models, task, subject_model, mean=mean, std=std)
-    train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-    validation_dataset = MultifunctionSubjectModelDataset(subject_model_io, validation_models, task, subject_model, mean=mean, std=std)
-    validation_dataloader = DataLoader(validation_dataset, batch_size=batch_size, shuffle=True)
+    train_dataset = MultifunctionSubjectModelDataset(subject_model_io, train_models, task, subject_model)
+    train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, pin_memory=True)
+    validation_dataset = MultifunctionSubjectModelDataset(subject_model_io, validation_models, task, subject_model)
+    validation_dataloader = DataLoader(validation_dataset, batch_size=batch_size, shuffle=True, pin_memory=True)
 
     optimizer = torch.optim.Adam(interpretability_model.parameters(), lr=lr, weight_decay=0.001)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=100, factor=0.1, verbose=True)
@@ -198,15 +186,16 @@ class MultifunctionSubjectModelDataset(Dataset):
         self.device = device
         self.task = task
         self.subject_model = subject_model
-        self.mean = mean
-        self.std = std
 
         self.metadata = self._index_metadata()
+        self._data = [None for _ in self.subject_model_ids]
 
     def __len__(self):
         return len(self.subject_model_ids)
 
     def __getitem__(self, idx):
+        if self._data[idx]:
+            return self._data[idx]
         name = self.subject_model_ids[idx]
         metadata = self.metadata[name]
 
@@ -220,7 +209,8 @@ class MultifunctionSubjectModelDataset(Dataset):
         x = torch.concat(
             [param.detach().reshape(-1) for _, param in model.named_parameters()]
         )
-        # x = (x - self.mean) / self.std
+
+        self._data[idx] = (x, y)
 
         return x, y
 

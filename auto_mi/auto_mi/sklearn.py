@@ -6,7 +6,7 @@ from sklearn.model_selection import train_test_split
 import torch
 import torch.nn.functional as F
 
-from auto_mi.tasks import Task, Example, TRAIN, VAL
+from auto_mi.tasks import Task, Example, TRAIN, VAL, MI
 
 class SimpleTask(Task):
     def __init__(self, example_class, input_shape, num_classes, seed=0., train=True, **kwargs):
@@ -38,6 +38,9 @@ class SimpleTask(Task):
 class SimpleExample(Example, ABC):
     def __init__(self, permutation_map, type=TRAIN):
         self._permutation_map = permutation_map
+
+        if type == MI:
+            return
 
         X, y = self._get_dataset()
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)

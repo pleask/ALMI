@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 import argparse
 import json
 import os
+import pickle
 import random
 from time import gmtime, strftime
 import uuid
@@ -140,7 +141,7 @@ class TarModelWriter(DirModelWriter):
         tar_archive_path = f'{self.dir}/{model_id[:2]}.tar'
 
         # Temporarily save the model to disk
-        torch.save(model.state_dict(), tmp_model_path)
+        torch.save(model.state_dict(), tmp_model_path, pickle_protocol=pickle.HIGHEST_PROTOCOL)
 
         print(f'Acquiring lock to write model {model_id}')
         lock = filelock.FileLock(lock_file_path)
