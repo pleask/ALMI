@@ -36,7 +36,7 @@ def train_mi_model(interpretability_model, interpretability_model_io, subject_mo
     validation_dataloader = DataLoader(validation_dataset, batch_size=batch_size, shuffle=True, pin_memory=True)
 
     optimizer = torch.optim.Adam(interpretability_model.parameters(), lr=lr)#, weight_decay=0.001)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=1000, factor=0.1, verbose=True)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=10, factor=0.1, verbose=True)
     criterion = nn.CrossEntropyLoss()
 
     scaler = None
@@ -51,32 +51,9 @@ def train_mi_model(interpretability_model, interpretability_model_io, subject_mo
         for i, (inputs, targets) in enumerate(train_dataloader):
             # TODO: make it so amp and grad accum can be used together
             if amp:
-                optimizer.zero_grad()
-
-                with autocast():
-                    outputs = interpretability_model(inputs.to(device, non_blocking=True))
-                    loss = criterion(outputs, targets.to(device, non_blocking=True))
-
-                scaler.scale(loss).backward()
-                scaler.step(optimizer)
-                scheduler.step(loss)
-                scaler.update()
-                wandb.log({'train_loss': loss})
+                raise NotImplementedError('AMP removed atm')
             elif grad_accum_steps > 1:
-                outputs = interpretability_model(inputs.to(device, non_blocking=True))
-                loss = 0
-                for i in range(outputs.shape[1]):
-                    loss += criterion(outputs[:, i], targets[:, i].to(device))
-                # loss = criterion(outputs, targets.to(device, non_blocking=True))
-                loss.backward()
-                total_loss += loss
-                wandb.log({'train_loss': loss.detach().cpu()})
-
-                if (i + 1) % grad_accum_steps == 0:
-                    optimizer.step()
-                    scheduler.step(total_loss)
-                    optimizer.zero_grad()
-                    total_loss = 0.
+                raise NotImplementedError('Grade accum removed atm')
             else:
                 optimizer.zero_grad()
                 outputs = interpretability_model(inputs.to(device, non_blocking=True))
@@ -85,9 +62,9 @@ def train_mi_model(interpretability_model, interpretability_model_io, subject_mo
                     loss += criterion(outputs[:, i], targets[:, i].to(device))
                 loss.backward()
                 optimizer.step()
-                scheduler.step(loss)
                 wandb.log({'train_loss': loss})
 
+        scheduler.step(loss)
         interpretability_model.eval()
         with torch.no_grad():
             eval_loss = 0.
