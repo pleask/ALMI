@@ -36,7 +36,7 @@ def train_mi_model(interpretability_model, interpretability_model_io, subject_mo
     validation_dataloader = DataLoader(validation_dataset, batch_size=batch_size, shuffle=True, pin_memory=True)
 
     optimizer = torch.optim.Adam(interpretability_model.parameters(), lr=lr, weight_decay=0.001)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=100, factor=0.1, verbose=True)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=1000, factor=0.1, verbose=True)
     criterion = nn.BCEWithLogitsLoss()
 
     scaler = None
@@ -90,7 +90,6 @@ def train_mi_model(interpretability_model, interpretability_model_io, subject_mo
                 outputs = interpretability_model(inputs.to(device))
                 loss = criterion(outputs, targets.to(device))
                 eval_loss += loss.item()
-
             
             predicted_classes = torch.argmax(outputs, dim=-1)
             target_classes = torch.argmax(targets, dim=-1)
@@ -194,7 +193,7 @@ class MultifunctionSubjectModelDataset(Dataset):
         # Initially set normalise to false so we don't attempt to retrieve normalised data for normalisation
         self._normalise = False
         if normalise:
-            samples = [self[i][0] for i in range(len(subject_model_ids) // 10)]
+            samples = [self[i][0] for i in range(len(subject_model_ids) // 1)]
             params = torch.stack(samples).view(-1)
             self._std, self._mean = torch.std_mean(params, dim=-1)
             self._normalise = True
@@ -262,9 +261,9 @@ class Transformer(nn.Module, MetadataBase):
         super().__init__()
         self.out_shape = out_shape
         output_size = torch.zeros(out_shape).view(-1).shape[0]
-        self.positional_encoding = PositionalEncoding(64, subject_model_parameter_count)
+        self.positional_encoding = PositionalEncoding(256, subject_model_parameter_count)
 
-        encoder_layer = nn.TransformerEncoderLayer(d_model=self.positional_encoding.length * 2, nhead=num_heads, dim_feedforward=2048)
+        encoder_layer = nn.TransformerEncoderLayer(d_model=self.positional_encoding.length * 2, nhead=num_heads, dim_feedforward=512, batch_first=True)
         self.transformer_encoder = nn.TransformerEncoder(
             encoder_layer,
             num_layers=num_layers,
@@ -273,7 +272,7 @@ class Transformer(nn.Module, MetadataBase):
 
         # Linear layer for classification
         self.global_avg_pooling = nn.AdaptiveAvgPool1d(1)
-        self.fc = nn.Linear(subject_model_parameter_count, output_size)
+        self.fc = nn.Linear(self.positional_encoding.length * 2, output_size)
 
     def forward(self, x):
         x = x.unsqueeze(-1)
@@ -281,6 +280,7 @@ class Transformer(nn.Module, MetadataBase):
         x = self.positional_encoding(x)
         x = self.transformer_encoder(x)
 
+        x = x.transpose(1, 2)
         x = self.global_avg_pooling(x).squeeze(2)
         output = self.fc(x)
         output = output.view(-1, *self.out_shape)
