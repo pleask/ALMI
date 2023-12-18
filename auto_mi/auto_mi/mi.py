@@ -39,30 +39,18 @@ def train_mi_model(interpretability_model, interpretability_model_io, subject_mo
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=10, factor=0.1, verbose=True)
     criterion = nn.CrossEntropyLoss()
 
-    scaler = None
-    if amp:
-        scaler = GradScaler()
-
-    if grad_accum_steps > 1:
-        total_loss = 0.
-
     for epoch in tqdm(range(epochs), desc='Interpretability model epochs'):
         interpretability_model.train()
         for i, (inputs, targets) in enumerate(train_dataloader):
-            # TODO: make it so amp and grad accum can be used together
-            if amp:
-                raise NotImplementedError('AMP removed atm')
-            elif grad_accum_steps > 1:
-                raise NotImplementedError('Grade accum removed atm')
-            else:
-                optimizer.zero_grad()
+            optimizer.zero_grad()
+            with torch.autocast(device_type=device, ):
                 outputs = interpretability_model(inputs.to(device, non_blocking=True))
                 loss = 0
                 for i in range(outputs.shape[1]):
                     loss += criterion(outputs[:, i], targets[:, i].to(device))
-                loss.backward()
-                optimizer.step()
-                wandb.log({'train_loss': loss})
+            loss.backward()
+            optimizer.step()
+            wandb.log({'train_loss': loss})
 
         scheduler.step(loss)
         interpretability_model.eval()
