@@ -17,7 +17,7 @@ TRAIN_RATIO = 0.8
 INTERPRETABILITY_BATCH_SIZE = 2**7
 
 # TODO: subject_model can go into the IO class rather than be passed in here
-def train_mi_model(interpretability_model, interpretability_model_io, subject_model, subject_model_io, trainer, task, batch_size=2**7, epochs=1000, device='cuda', lr=1e-5, amp=False, grad_accum_steps=1, subject_model_count=-1):
+def train_mi_model(interpretability_model, interpretability_model_io, subject_model, subject_model_io, trainer, task, batch_size=2**7, epochs=1000, device='cuda', lr=1e-6, amp=False, grad_accum_steps=1, subject_model_count=-1):
     """
     amp: Use automatic mixed precision
     """
@@ -35,9 +35,9 @@ def train_mi_model(interpretability_model, interpretability_model_io, subject_mo
     validation_dataset = MultifunctionSubjectModelDataset(subject_model_io, validation_models, task, subject_model, normalise=True)
     validation_dataloader = DataLoader(validation_dataset, batch_size=batch_size, shuffle=True, pin_memory=True)
 
-    optimizer = torch.optim.Adam(interpretability_model.parameters(), lr=lr, weight_decay=0.001)
+    optimizer = torch.optim.Adam(interpretability_model.parameters(), lr=lr)#, weight_decay=0.001)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=1000, factor=0.1, verbose=True)
-    criterion = nn.BCEWithLogitsLoss()
+    criterion = nn.CrossEntropyLoss()
 
     scaler = None
     if amp:
@@ -64,7 +64,10 @@ def train_mi_model(interpretability_model, interpretability_model_io, subject_mo
                 wandb.log({'train_loss': loss})
             elif grad_accum_steps > 1:
                 outputs = interpretability_model(inputs.to(device, non_blocking=True))
-                loss = criterion(outputs, targets.to(device, non_blocking=True))
+                loss = 0
+                for i in range(outputs.shape[1]):
+                    loss += criterion(outputs[:, i], targets[:, i].to(device))
+                # loss = criterion(outputs, targets.to(device, non_blocking=True))
                 loss.backward()
                 total_loss += loss
                 wandb.log({'train_loss': loss.detach().cpu()})
@@ -77,7 +80,9 @@ def train_mi_model(interpretability_model, interpretability_model_io, subject_mo
             else:
                 optimizer.zero_grad()
                 outputs = interpretability_model(inputs.to(device, non_blocking=True))
-                loss = criterion(outputs, targets.to(device, non_blocking=True))
+                loss = 0
+                for i in range(outputs.shape[1]):
+                    loss += criterion(outputs[:, i], targets[:, i].to(device))
                 loss.backward()
                 optimizer.step()
                 scheduler.step(loss)
@@ -261,9 +266,9 @@ class Transformer(nn.Module, MetadataBase):
         super().__init__()
         self.out_shape = out_shape
         output_size = torch.zeros(out_shape).view(-1).shape[0]
-        self.positional_encoding = PositionalEncoding(256, subject_model_parameter_count)
+        self.positional_encoding = PositionalEncoding(2048, subject_model_parameter_count)
 
-        encoder_layer = nn.TransformerEncoderLayer(d_model=self.positional_encoding.length * 2, nhead=num_heads, dim_feedforward=512, batch_first=True)
+        encoder_layer = nn.TransformerEncoderLayer(d_model=self.positional_encoding.length * 2, nhead=num_heads, dim_feedforward=2048, batch_first=True)
         self.transformer_encoder = nn.TransformerEncoder(
             encoder_layer,
             num_layers=num_layers,
@@ -273,6 +278,7 @@ class Transformer(nn.Module, MetadataBase):
         # Linear layer for classification
         self.global_avg_pooling = nn.AdaptiveAvgPool1d(1)
         self.fc = nn.Linear(self.positional_encoding.length * 2, output_size)
+        self.softmax = nn.Softmax(dim=-1)
 
     def forward(self, x):
         x = x.unsqueeze(-1)
@@ -284,8 +290,7 @@ class Transformer(nn.Module, MetadataBase):
         x = self.global_avg_pooling(x).squeeze(2)
         output = self.fc(x)
         output = output.view(-1, *self.out_shape)
-
-        return output
+        return self.softmax(output)
 
 
 class LSTMClassifier(nn.Module):

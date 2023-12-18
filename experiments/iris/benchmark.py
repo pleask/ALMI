@@ -115,8 +115,7 @@ if __name__ == '__main__':
     else:
         wandb.init(project='bounding-mi', entity='patrickaaleask', reinit=True)
 
-        positional_encoding = PositionalEncoding(8, subject_model_parameter_count)
-        interpretability_model = Transformer(subject_model_parameter_count, task.mi_output_shape, positional_encoding, num_layers=6).to(args.device)
+        interpretability_model = Transformer(subject_model_parameter_count, task.mi_output_shape, num_layers=1, num_heads=1).to(args.device)
         interpretability_model_parameter_count = sum(p.numel() for p in interpretability_model.parameters())
         print(f'Interpretability model parameter count: {interpretability_model_parameter_count}')
         train_mi_model(interpretability_model, interpretability_model_io, subject_model, subject_model_io, trainer, task, device=args.device, lr=0.001)
