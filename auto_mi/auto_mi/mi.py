@@ -262,11 +262,11 @@ class PositionalEncoding(nn.Module):
 
 
 class Transformer(nn.Module, MetadataBase):
-    def __init__(self, subject_model_parameter_count, out_shape, num_layers=6, num_heads=1):
+    def __init__(self, subject_model_parameter_count, out_shape, num_layers=6, num_heads=1, positional_encoding_size=4096):
         super().__init__()
         self.out_shape = out_shape
         output_size = torch.zeros(out_shape).view(-1).shape[0]
-        self.positional_encoding = PositionalEncoding(2048, subject_model_parameter_count)
+        self.positional_encoding = PositionalEncoding(positional_encoding_size, subject_model_parameter_count)
 
         encoder_layer = nn.TransformerEncoderLayer(d_model=self.positional_encoding.length * 2, nhead=num_heads, dim_feedforward=2048, batch_first=True)
         self.transformer_encoder = nn.TransformerEncoder(
