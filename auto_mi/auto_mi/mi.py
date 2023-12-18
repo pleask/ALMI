@@ -258,7 +258,8 @@ class PositionalEncoding(nn.Module):
     def forward(self, x):
         pe = torch.cat([self.position_weights[:x.size(1), :], self.position_biases[:x.size(1), :]], dim=1).unsqueeze(0)
         pe = pe.expand(x.shape[0], -1, -1)
-        return torch.cat([x, pe], dim =-1)
+        return x + pe
+        # return torch.cat([x, pe], dim =-1)
 
 
 class Transformer(nn.Module, MetadataBase):
@@ -268,16 +269,16 @@ class Transformer(nn.Module, MetadataBase):
         output_size = torch.zeros(out_shape).view(-1).shape[0]
         self.positional_encoding = PositionalEncoding(positional_encoding_size, subject_model_parameter_count)
 
-        encoder_layer = nn.TransformerEncoderLayer(d_model=self.positional_encoding.length * 2, nhead=num_heads, dim_feedforward=2048, batch_first=True)
+        encoder_layer = nn.TransformerEncoderLayer(d_model=self.positional_encoding.length, nhead=num_heads, dim_feedforward=2048, batch_first=True)
         self.transformer_encoder = nn.TransformerEncoder(
             encoder_layer,
             num_layers=num_layers,
-            norm=nn.LayerNorm(self.positional_encoding.length * 2),
+            norm=nn.LayerNorm(self.positional_encoding.length),
         )
 
         # Linear layer for classification
         self.global_avg_pooling = nn.AdaptiveAvgPool1d(1)
-        self.fc = nn.Linear(self.positional_encoding.length * 2, output_size)
+        self.fc = nn.Linear(self.positional_encoding.length, output_size)
         self.softmax = nn.Softmax(dim=-1)
 
     def forward(self, x):
