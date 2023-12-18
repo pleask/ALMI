@@ -1,5 +1,6 @@
 import random
 
+import numpy as np
 import torch
 from torch.cuda.amp import autocast, GradScaler
 import torch.nn as nn
@@ -16,7 +17,7 @@ TRAIN_RATIO = 0.8
 INTERPRETABILITY_BATCH_SIZE = 2**7
 
 # TODO: subject_model can go into the IO class rather than be passed in here
-def train_mi_model(interpretability_model, interpretability_model_io, subject_model, subject_model_io, trainer, task, batch_size=2**7, epochs=100, device='cuda', lr=1e-5, amp=False, grad_accum_steps=1, subject_model_count=-1):
+def train_mi_model(interpretability_model, interpretability_model_io, subject_model, subject_model_io, trainer, task, batch_size=2**7, epochs=1000, device='cuda', lr=1e-5, amp=False, grad_accum_steps=1, subject_model_count=-1):
     """
     amp: Use automatic mixed precision
     """
@@ -29,9 +30,9 @@ def train_mi_model(interpretability_model, interpretability_model_io, subject_mo
     print(f'Using {len(all_subject_models)} subject models')
     validation_models, train_models  = all_subject_models[:int(VAL_RATIO*len(all_subject_models))], all_subject_models[int(VAL_RATIO*len(all_subject_models)):]
 
-    train_dataset = MultifunctionSubjectModelDataset(subject_model_io, train_models, task, subject_model)
+    train_dataset = MultifunctionSubjectModelDataset(subject_model_io, train_models, task, subject_model, normalise=True)
     train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, pin_memory=True)
-    validation_dataset = MultifunctionSubjectModelDataset(subject_model_io, validation_models, task, subject_model)
+    validation_dataset = MultifunctionSubjectModelDataset(subject_model_io, validation_models, task, subject_model, normalise=True)
     validation_dataloader = DataLoader(validation_dataset, batch_size=batch_size, shuffle=True, pin_memory=True)
 
     optimizer = torch.optim.Adam(interpretability_model.parameters(), lr=lr, weight_decay=0.001)
@@ -180,7 +181,7 @@ def get_matching_subject_models_names(model_writer, trainer, task=SimpleFunction
 
 
 class MultifunctionSubjectModelDataset(Dataset):
-    def __init__(self, model_loader, subject_model_ids, task, subject_model, mean=0., std=1., device='cpu'):
+    def __init__(self, model_loader, subject_model_ids, task, subject_model, normalise=False, device='cpu'):
         self._model_loader = model_loader
         self.subject_model_ids = subject_model_ids
         self.device = device
@@ -189,6 +190,15 @@ class MultifunctionSubjectModelDataset(Dataset):
 
         self.metadata = self._index_metadata()
         self._data = [None for _ in self.subject_model_ids]
+
+        # Initially set normalise to false so we don't attempt to retrieve normalised data for normalisation
+        self._normalise = False
+        if normalise:
+            samples = [self[i][0] for i in range(len(subject_model_ids) // 10)]
+            params = torch.stack(samples).view(-1)
+            self._std, self._mean = torch.std_mean(params, dim=-1)
+            self._normalise = True
+
 
     def __len__(self):
         return len(self.subject_model_ids)
@@ -209,6 +219,8 @@ class MultifunctionSubjectModelDataset(Dataset):
         x = torch.concat(
             [param.detach().reshape(-1) for _, param in model.named_parameters()]
         )
+        if self._normalise:
+            x = (x - self._mean) / self._std
 
         self._data[idx] = (x, y)
 
