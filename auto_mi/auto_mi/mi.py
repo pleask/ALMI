@@ -35,9 +35,11 @@ def train_mi_model(interpretability_model, interpretability_model_io, subject_mo
     validation_dataset = MultifunctionSubjectModelDataset(subject_model_io, validation_models, task, subject_model, normalise=True)
     validation_dataloader = DataLoader(validation_dataset, batch_size=batch_size, shuffle=True, pin_memory=True)
 
-    optimizer = torch.optim.Adam(interpretability_model.parameters(), lr=lr)#, weight_decay=0.001)
+    optimizer = torch.optim.Adam(interpretability_model.parameters(), lr=lr, weight_decay=0.001)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=10, factor=0.1, verbose=True)
     criterion = nn.CrossEntropyLoss()
+
+    interpretability_model = torch.compile(interpretability_model)
 
     for epoch in tqdm(range(epochs), desc='Interpretability model epochs'):
         interpretability_model.train()

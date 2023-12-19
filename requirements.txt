@@ -1,7 +1,7 @@
-numpy==1.25.0
-termplotlib==0.3.9
-torch==2.0.1
-wandb==0.15.4
+numpy
+termplotlib
+torch
+wandb
 pandas
 ipython
 matplotlib
