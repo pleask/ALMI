@@ -40,16 +40,16 @@ def train_mi_model(interpretability_model, interpretability_model_io, subject_mo
     criterion = nn.CrossEntropyLoss()
 
     interpretability_model = torch.compile(interpretability_model)
+    torch.backends.cuda.matmul.allow_tf32 = True
 
     for epoch in tqdm(range(epochs), desc='Interpretability model epochs'):
         interpretability_model.train()
         for i, (inputs, targets) in enumerate(train_dataloader):
             optimizer.zero_grad()
-            with torch.autocast(device_type=device, ):
-                outputs = interpretability_model(inputs.to(device, non_blocking=True))
-                loss = 0
-                for i in range(outputs.shape[1]):
-                    loss += criterion(outputs[:, i], targets[:, i].to(device))
+            outputs = interpretability_model(inputs.to(device, non_blocking=True))
+            loss = 0
+            for i in range(outputs.shape[1]):
+                loss += criterion(outputs[:, i], targets[:, i].to(device))
             loss.backward()
             optimizer.step()
             wandb.log({'train_loss': loss})
