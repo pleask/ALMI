@@ -1,6 +1,5 @@
-import argparse
 from itertools import permutations
-import random
+import os
 
 import numpy as np
 from sklearn import datasets
@@ -10,14 +9,10 @@ import torch
 import torch.nn.functional as F
 import torch.nn as nn
 from torch.utils.data import Dataset
-import wandb
 
 from auto_mi.base import MetadataBase
-from auto_mi.rl import pretrain_subject_models
-from auto_mi.tasks import Task, Example, TRAIN, VAL
-from auto_mi.trainers import AdamTrainer
+from auto_mi.tasks import Task, Example, TRAIN
 from auto_mi.utils import DirModelWriter
-from auto_mi.mi import Transformer, train_mi_model
 from auto_mi.cli import train_cli
 
 

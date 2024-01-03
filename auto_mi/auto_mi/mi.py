@@ -1,8 +1,7 @@
+import os
 import random
 
-import numpy as np
 import torch
-from torch.cuda.amp import autocast, GradScaler
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 import wandb
@@ -167,10 +166,12 @@ class MultifunctionSubjectModelDataset(Dataset):
         # Initially set normalise to false so we don't attempt to retrieve normalised data for normalisation
         self._normalise = False
         if normalise:
+            print('Normalising')
             samples = [self[i][0] for i in range(len(subject_model_ids) // 1)]
             params = torch.stack(samples).view(-1)
             self._std, self._mean = torch.std_mean(params, dim=-1)
             self._normalise = True
+            print('Done normalising')
 
 
     def __len__(self):
@@ -350,3 +351,10 @@ class IntegerGroupFunctionRecoveryModel(nn.Module, MetadataBase):
         x = self.fc3(x)
         x = x.view(-1, *self.out_shape)
         return self.softmax(x)
+
+class FreezableClassifier:
+    def __init__(self, file):
+        script_dir = os.path.dirname(os.path.abspath(file))
+        base_model_path = os.path.join(script_dir, 'base_model.pickle')
+        checkpoint = torch.load(base_model_path)
+        self.load_state_dict(checkpoint)

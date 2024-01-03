@@ -62,7 +62,7 @@ def train_cli(
     )
     subject_model_group.add_argument(
         "--subject_model_epochs",
-        type=str,
+        type=int,
         help="Number of epochs to train the subject models.",
         default=default_subject_model_epochs,
     )
@@ -152,7 +152,7 @@ def train_cli(
             subject_model_io,
             subject_model_class,
             task,
-            batch_size=args.subject_model_batch_size,
+            batch_size=args.subject_model_count,
         )
     else:
         wandb.init(
