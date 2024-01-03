@@ -17,7 +17,7 @@ TRAIN_RATIO = 0.8
 INTERPRETABILITY_BATCH_SIZE = 2**7
 
 # TODO: subject_model can go into the IO class rather than be passed in here
-def train_mi_model(interpretability_model, interpretability_model_io, subject_model, subject_model_io, trainer, task, batch_size=2**7, epochs=1000, device='cuda', lr=1e-5, amp=False, grad_accum_steps=1, subject_model_count=-1):
+def train_mi_model(interpretability_model, interpretability_model_io, subject_model, subject_model_io, trainer, task, batch_size=2**7, epochs=1000, device='cuda', lr=1e-5, subject_model_count=-1):
     """
     amp: Use automatic mixed precision
     """
@@ -151,7 +151,6 @@ def get_matching_subject_models_names(model_writer, trainer, task=SimpleFunction
         losses.append(md['loss'])
     
     return matching_subject_models_names, sum(losses) / len(losses) if losses else 0
-
 
 
 class MultifunctionSubjectModelDataset(Dataset):
