@@ -16,18 +16,27 @@ TRAIN_RATIO = 0.8
 INTERPRETABILITY_BATCH_SIZE = 2**7
 
 # TODO: subject_model can go into the IO class rather than be passed in here
-def train_mi_model(interpretability_model, interpretability_model_io, subject_model, subject_model_io, trainer, task, batch_size=2**7, epochs=1000, device='cuda', lr=1e-5, subject_model_count=-1):
+def train_mi_model(interpretability_model, interpretability_model_io, subject_model, subject_model_io, trainer, task, batch_size=2**7, epochs=1000, device='cuda', lr=1e-5, subject_model_count=-1, non_frozen_validate=True):
     """
-    amp: Use automatic mixed precision
+    non_frozen_validate: If set to true, validates only on non-frozen models.
     """
-    all_subject_models, _ = get_matching_subject_models_names(subject_model_io, trainer, task=task)
-    if subject_model_count > 0:
-        all_subject_models = all_subject_models[:subject_model_count]
-    if len(all_subject_models) == 0:
+    if non_frozen_validate:
+        frozen_subject_models = get_matching_subject_models_names(subject_model_io, trainer, task=task, frozen=NON_FROZEN_ONLY)
+        non_frozen_subject_models = get_matching_subject_models_names(subject_model_io, trainer, task=task, frozen=FROZEN_ONLY)
+        train_non_frozen = non_frozen_validate[int(VAL_RATIO*len(non_frozen_subject_models)):]
+        validation_models = non_frozen_validate[:int(VAL_RATIO*len(non_frozen_subject_models))]
+        train_models = frozen_subject_models + train_non_frozen
+    else:
+        all_subject_models, _ = get_matching_subject_models_names(subject_model_io, trainer, task=task)
+        if subject_model_count > 0:
+            all_subject_models = all_subject_models[:subject_model_count]
+        validation_models, train_models  = all_subject_models[:int(VAL_RATIO*len(all_subject_models))], all_subject_models[int(VAL_RATIO*len(all_subject_models)):]
+
+    total_model_count = len(validation_models) + len(train_models)
+    if total_model_count == 0: 
         raise ValueError('No subject models found')
-    wandb.log({'subject_model_count': len(all_subject_models)})
-    print(f'Using {len(all_subject_models)} subject models')
-    validation_models, train_models  = all_subject_models[:int(VAL_RATIO*len(all_subject_models))], all_subject_models[int(VAL_RATIO*len(all_subject_models)):]
+    wandb.log({'subject_model_count': total_model_count})
+    print(f'Using {len(total_model_count)} subject models')
 
     train_dataset = MultifunctionSubjectModelDataset(subject_model_io, train_models, task, subject_model, normalise=True)
     train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, pin_memory=True)
@@ -123,8 +132,11 @@ def train_interpretability_model(model, task, subject_model_path, validation_sub
     
     return eval_loss / len(eval_dataloader), train_loss / len(train_dataloader)
 
+FROZEN_ONLY = 'frozen_only'
+NON_FROZEN_ONLY = 'non_frozen_only'
+BOTH = 'both'
 
-def get_matching_subject_models_names(model_writer, trainer, task=SimpleFunctionRecoveryTask, exclude=[]):
+def get_matching_subject_models_names(model_writer, trainer, task=SimpleFunctionRecoveryTask, exclude=[], frozen=BOTH):
     matching_subject_models_names = []
     losses = []
     metadata = model_writer.get_metadata()
@@ -145,6 +157,15 @@ def get_matching_subject_models_names(model_writer, trainer, task=SimpleFunction
         if not model_writer.check_model_exists(md['id']):
             print('does not exist')
             continue
+
+        if frozen == FROZEN_ONLY:
+            if 'frozen' not in md:
+                continue
+            if len(md['frozen']) == 0:
+                continue
+        if frozen == NON_FROZEN_ONLY:
+            if 'frozen' in md and len(md['frozen']) != 0:
+                continue
 
         matching_subject_models_names.append(md['id'])
         losses.append(md['loss'])
@@ -193,6 +214,8 @@ class MultifunctionSubjectModelDataset(Dataset):
         )
         if self._normalise:
             x = (x - self._mean) / self._std
+
+        # x = x[-2740:]
 
         self._data[idx] = (x, y)
 

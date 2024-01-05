@@ -84,7 +84,6 @@ class ConcurrentMetadataWriter(ModelWriter):
         self._metadata = None
 
     def write_metadata(self, md):
-        print("Acquiring lock to write metadata")
         lock = filelock.FileLock(self._index_lock)
         with lock, open(self._index_path, "a") as md_file:
             md_file.write(json.dumps(md) + "\n")
@@ -155,7 +154,6 @@ class TarModelWriter(DirModelWriter):
             model.state_dict(), tmp_model_path, pickle_protocol=pickle.HIGHEST_PROTOCOL
         )
 
-        print(f"Acquiring lock to write model {model_id}")
         lock = filelock.FileLock(lock_file_path)
         with lock:
             if not os.path.exists(tar_archive_path):

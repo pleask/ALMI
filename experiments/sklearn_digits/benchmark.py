@@ -1,4 +1,4 @@
-from itertools import permutations
+from itertools import permutations, combinations
 import random
 
 import numpy as np
@@ -125,11 +125,18 @@ class FreezableDigitsClassifier(DigitsClassifier, FreezableClassifier):
         """
         DigitsClassifier.__init__(self)
         FreezableClassifier.__init__(self, __file__)
-        self.frozen = (0, 1)
+        frozen_combinations = list(combinations(list(range(4)), 2)) + list(combinations(list(range(4)), 1)) + [tuple()]
+        self.frozen = frozen_combinations[-1]
+
+    def get_metadata(self):
+        md = super().get_metadata()
+        md['frozen'] = self.frozen
+        return md
 
 
 if __name__ == '__main__':
     train_cli(
+        [f'sklearn_digits', f'{NUM_DIGITS} digits'],
         DirModelWriter,
         DirModelWriter,
         PermutedDigitsTask,

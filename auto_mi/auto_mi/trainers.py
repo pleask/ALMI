@@ -100,4 +100,4 @@ class AdamTrainer(BaseTrainer):
                     frozen_param_count += p.numel()
             return frozen_param_count
         except AttributeError:
-            pass
+            return 0

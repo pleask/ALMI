@@ -13,6 +13,7 @@ from auto_mi.utils import evaluate_subject_model
 
 
 def train_cli(
+    tags, 
     subject_model_io_class,
     interpretability_model_io_class,
     task_class,
@@ -114,7 +115,7 @@ def train_cli(
     interpretability_model_group.add_argument(
         "--interpretability_model_subject_model_count",
         type=int,
-        help="Number of layers for the transformer model.",
+        help="Number of subject models to use for training the interpretability model.",
         default=default_interpretability_model_subject_model_count,
     )
     args = parser.parse_args()
@@ -158,8 +159,7 @@ def train_cli(
             project="bounding-mi",
             entity="patrickaaleask",
             reinit=True,
-            # TODO: Fix tags here
-            tags=["diag_straight"],
+            tags=tags,
         )
 
         interpretability_model = Transformer(
