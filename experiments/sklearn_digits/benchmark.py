@@ -18,13 +18,14 @@ from auto_mi.cli import train_cli
 
 
 TRAIN_RATIO = 0.7
+NUM_DIGITS = 3
 
 
 # TODO: commonise with other sklearn tasks
 class PermutedDigitsTask(Task):
     def __init__(self, seed=0., train=True, **kwargs):
         super().__init__(seed=seed, train=train)
-        p = list(permutations(range(10)))
+        p = list(permutations(range(NUM_DIGITS)))
         # Shuffle the permutations so we see examples where all output classes
         # are remapped.
         r = random.Random(seed)
@@ -43,17 +44,16 @@ class PermutedDigitsTask(Task):
 
     @property
     def output_shape(self):
-        return (10, )
+        return (NUM_DIGITS, )
 
     @property
     def mi_output_shape(self):
-        return (10, 10)
+        return (NUM_DIGITS, NUM_DIGITS)
 
     def criterion(self, x, y):
         return F.nll_loss(x, y)
 
 
-# TODO: Commonise this with the iris code (same for models)
 class PermutedDigitsExample(Example):
     def __init__(self, permutation_map, type=TRAIN):
         self._permutation_map = permutation_map
@@ -64,6 +64,11 @@ class PermutedDigitsExample(Example):
         digits_dataset = datasets.load_digits()
         X = digits_dataset.data
         y = digits_dataset.target
+
+        # Filter down to just NUM_DIGITS classes
+        example_mask = [_y < NUM_DIGITS for _y in y]
+        X = [x for x, t in zip(X, example_mask) if t]
+        y = [_y for _y, t in zip(y, example_mask) if t]
 
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
@@ -128,11 +133,12 @@ if __name__ == '__main__':
         DirModelWriter,
         DirModelWriter,
         PermutedDigitsTask,
+        # DigitsClassifier,
         FreezableDigitsClassifier,
         default_subject_model_epochs=100,
         default_subject_model_batch_size=1000,
         default_subject_model_lr=0.01,
         default_interpretability_model_num_layers=1,
-        default_interpretability_model_num_heads=4,
-        default_interpretability_model_positional_encoding_size=1024,
+        default_interpretability_model_num_heads=2,
+        default_interpretability_model_positional_encoding_size=2048,
     )

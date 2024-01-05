@@ -63,7 +63,7 @@ def train_mi_model(interpretability_model, interpretability_model_io, subject_mo
                 loss = criterion(outputs, targets.to(device))
                 eval_loss += loss.item()
 
-            eval_loss /= eval_loss / len(validation_dataloader)
+            eval_loss /= len(validation_dataloader)
             
             predicted_classes = torch.argmax(outputs, dim=-1)
             target_classes = torch.argmax(targets, dim=-1)
@@ -166,12 +166,10 @@ class MultifunctionSubjectModelDataset(Dataset):
         # Initially set normalise to false so we don't attempt to retrieve normalised data for normalisation
         self._normalise = False
         if normalise:
-            print('Normalising')
             samples = [self[i][0] for i in range(len(subject_model_ids) // 1)]
             params = torch.stack(samples).view(-1)
             self._std, self._mean = torch.std_mean(params, dim=-1)
             self._normalise = True
-            print('Done normalising')
 
 
     def __len__(self):

@@ -98,7 +98,6 @@ class AdamTrainer(BaseTrainer):
                 if (i // 2) in frozen:
                     p.requires_grad = False
                     frozen_param_count += p.numel()
+            return frozen_param_count
         except AttributeError:
             pass
-
-        return frozen_param_count

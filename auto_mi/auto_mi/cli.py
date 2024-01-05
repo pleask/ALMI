@@ -89,13 +89,13 @@ def train_cli(
     )
     interpretability_model_group.add_argument(
         "--interpretability_model_num_layers",
-        type=str,
+        type=int,
         help="Number of layers for the transformer model.",
         default=default_interpretability_model_num_layers,
     )
     interpretability_model_group.add_argument(
         "--interpretability_model_num_heads",
-        type=str,
+        type=int,
         help="Number of layers for the transformer model.",
         default=default_interpretability_model_num_heads,
     )
@@ -107,13 +107,13 @@ def train_cli(
     )
     interpretability_model_group.add_argument(
         "--interpretability_model_batch_size",
-        type=str,
+        type=int,
         help="Number of layers for the transformer model.",
         default=default_interpretability_model_batch_size,
     )
     interpretability_model_group.add_argument(
         "--interpretability_model_subject_model_count",
-        type=str,
+        type=int,
         help="Number of layers for the transformer model.",
         default=default_interpretability_model_subject_model_count,
     )
@@ -139,7 +139,6 @@ def train_cli(
 
     sample_model = subject_model_class(task)
     subject_model_parameter_count = sum(p.numel() for p in sample_model.parameters())
-    print("Layer parameters")
     print(f"Subject model parameter count: {subject_model_parameter_count}", flush=True)
 
     if args.train_subject_models:
@@ -159,6 +158,7 @@ def train_cli(
             project="bounding-mi",
             entity="patrickaaleask",
             reinit=True,
+            # TODO: Fix tags here
             tags=["diag_straight"],
         )
 
