@@ -124,7 +124,12 @@ class DirModelWriter(ConcurrentMetadataWriter):
             if device == "cuda"
             else (model_path, {"map_location": torch.device("cpu")})
         )
-        model.load_state_dict(torch.load(*load_args))
+        params = torch.load(*load_args)
+        try:
+            model.load_state_dict(params)
+        except RuntimeError:
+            params = {k.removeprefix("_orig_mod."): v for k,v in params.items()}
+            model.load_state_dict(params)
 
         return model
 

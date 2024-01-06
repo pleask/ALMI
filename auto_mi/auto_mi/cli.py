@@ -7,13 +7,13 @@ import random
 import wandb
 
 from auto_mi.trainers import AdamTrainer
-from auto_mi.mi import Transformer, train_mi_model
+from auto_mi.mi import Transformer, train_mi_model, evaluate_interpretability_model
 from auto_mi.rl import pretrain_subject_models
 from auto_mi.utils import evaluate_subject_model
 
 
 def train_cli(
-    tags, 
+    tags,
     subject_model_io_class,
     interpretability_model_io_class,
     task_class,
@@ -26,6 +26,7 @@ def train_cli(
     default_interpretability_model_positional_encoding_size=1024,
     default_interpretability_model_batch_size=2**5,
     default_interpretability_model_subject_model_count=-1,
+    non_frozen_validate=True,
 ):
     """
     CLI wrapper for training subject models and interpretability models for a task set up.
@@ -118,18 +119,22 @@ def train_cli(
         help="Number of subject models to use for training the interpretability model.",
         default=default_interpretability_model_subject_model_count,
     )
+    subject_model_group.add_argument(
+        "--evaluate_interpretability_model",
+        type=str,
+        help="Evaluate an interpretability model.",
+    )
     args = parser.parse_args()
 
     subject_model_io = subject_model_io_class(args.subject_model_path)
     interpretability_model_io = interpretability_model_io_class(
         args.interpretability_model_path
     )
-
-    if args.evaluate_subject_models:
-        evaluate_subject_model(task_class, subject_model_class, subject_model_io)
-        quit()
-
     task = task_class(args.seed)
+    sample_model = subject_model_class(task)
+    subject_model_parameter_count = sum(p.numel() for p in sample_model.parameters())
+    print(f"Subject model parameter count: {subject_model_parameter_count}", flush=True)
+
     trainer = AdamTrainer(
         task,
         args.subject_model_epochs,
@@ -137,10 +142,28 @@ def train_cli(
         lr=args.subject_model_lr,
         device=args.device,
     )
+    interpretability_model = Transformer(
+        subject_model_parameter_count,
+        task.mi_output_shape,
+        num_layers=args.interpretability_model_num_layers,
+        num_heads=args.interpretability_model_num_heads,
+        positional_encoding_size=args.interpretability_model_positional_encoding_size,
+    ).to(args.device)
 
-    sample_model = subject_model_class(task)
-    subject_model_parameter_count = sum(p.numel() for p in sample_model.parameters())
-    print(f"Subject model parameter count: {subject_model_parameter_count}", flush=True)
+    if args.evaluate_subject_models:
+        evaluate_subject_model(task_class, subject_model_class, subject_model_io)
+        quit()
+    if args.evaluate_interpretability_model:
+        evaluate_interpretability_model(
+            args.evaluate_interpretability_model,
+            interpretability_model,
+            interpretability_model_io,
+            subject_model_class,
+            subject_model_io,
+            task,
+            trainer,
+        )
+        quit()
 
     if args.train_subject_models:
         state_space = [trainer]
@@ -162,13 +185,6 @@ def train_cli(
             tags=tags,
         )
 
-        interpretability_model = Transformer(
-            subject_model_parameter_count,
-            task.mi_output_shape,
-            num_layers=args.interpretability_model_num_layers,
-            num_heads=args.interpretability_model_num_heads,
-            positional_encoding_size=args.interpretability_model_positional_encoding_size,
-        ).to(args.device)
         interpretability_model_parameter_count = sum(
             p.numel() for p in interpretability_model.parameters()
         )
@@ -185,4 +201,5 @@ def train_cli(
             device=args.device,
             batch_size=args.interpretability_model_batch_size,
             subject_model_count=args.interpretability_model_subject_model_count,
+            non_frozen_validate=non_frozen_validate,
         )

@@ -1,4 +1,5 @@
 from itertools import permutations, combinations
+import os
 import random
 
 import numpy as np
@@ -126,7 +127,10 @@ class FreezableDigitsClassifier(DigitsClassifier, FreezableClassifier):
         DigitsClassifier.__init__(self)
         FreezableClassifier.__init__(self, __file__)
         frozen_combinations = list(combinations(list(range(4)), 2)) + list(combinations(list(range(4)), 1)) + [tuple()]
-        self.frozen = frozen_combinations[-1]
+        try:
+            self.frozen = frozen_combinations[int(os.environ.get('FROZEN'))]
+        except TypeError:
+            self.frozen = frozen_combinations[0]
 
     def get_metadata(self):
         md = super().get_metadata()
@@ -148,4 +152,5 @@ if __name__ == '__main__':
         default_interpretability_model_num_layers=1,
         default_interpretability_model_num_heads=2,
         default_interpretability_model_positional_encoding_size=2048,
+        non_frozen_validate=True,
     )
