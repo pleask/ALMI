@@ -21,4 +21,4 @@ else
     SUBJECT_MODEL_COUNT=1000
 fi
 
-stdbuf -oL FROZEN=$FROZEN NUM_DIGITS=$NUM_DIGITS WANDB_DISABLED=true python3 bounding-mi-repo/experiments/sklearn_digits/benchmark.py --seed 0 --device cuda --train_subject_models --subject_model_count $SUBJECT_MODEL_COUNT --subject_model_path sklearn_digits/${NUM_DIGITS}/subject-models 
+FROZEN=$FROZEN NUM_DIGITS=$NUM_DIGITS WANDB_DISABLED=true stdbuf -oL python3 bounding-mi-repo/experiments/sklearn_digits/benchmark.py --seed 0 --device cuda --train_subject_models --subject_model_count $SUBJECT_MODEL_COUNT --subject_model_path sklearn_digits/${NUM_DIGITS}/subject-models 
