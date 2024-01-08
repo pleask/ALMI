@@ -13,4 +13,4 @@ module load cuda/11.7
 
 NUM_DIGITS=$((5 + SLURM_ARRAY_TASK_ID))
 
-NUM_DIGITS=$NUM_DIGITS WAND_API_KEY=dd685d7aa9b38a2289e5784a961b81e22fc4c735  stdbuf -oL /home3/wclv88/bounding-mi/bin/python /home3/wclv88/bounding-mi-repo/experiments/sklearn_digits/benchmark.py --seed 0 --device cuda --subject_model_path sklearn_digits/${NUM_DIGITS}/subject_models --interpretability_model_path=sklearn_digits/interpretability_models --interpretability_batch_size 8 
+NUM_DIGITS=$NUM_DIGITS stdbuf -oL /home3/wclv88/bounding-mi/bin/python /home3/wclv88/bounding-mi-repo/experiments/sklearn_digits/benchmark.py --seed 0 --device cuda --subject_model_path sklearn_digits/${NUM_DIGITS}/subject_models --interpretability_model_path=sklearn_digits/interpretability_models --interpretability_batch_size 8 
