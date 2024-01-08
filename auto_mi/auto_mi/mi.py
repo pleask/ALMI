@@ -1,3 +1,6 @@
+"""
+Methods for training and evaluating interpretability models.
+"""
 import os
 import random
 
@@ -33,7 +36,9 @@ def train_mi_model(
     validate_on_non_frozen=True,
 ):
     """
-    non_frozen_validate: If set to true, validates only on non-frozen models.
+    Trains an interpretability transformer model on the specified subject models.
+
+    validate_on_non_frozen: If set to true, validates only on non-frozen models.
     """
     if validate_on_non_frozen:
         frozen_subject_models, _ = get_matching_subject_models_names(
@@ -146,6 +151,11 @@ def evaluate_interpretability_model(
     batch_size=2**5,
     device="cuda",
 ):
+    """
+    Evaluates an interpretability model on the specified subject models.
+
+    validate_on_non_frozen: If set to true, validates only on non-frozen models.
+    """
     if not validate_on_non_frozen:
         raise NotImplementedError
 
@@ -177,85 +187,6 @@ def evaluate_interpretability_model(
     print(f"Evaluation accuracy: {accuracy}")
 
 
-# TODO: Remove this function as redundant
-def train_interpretability_model(
-    model,
-    task,
-    subject_model_path,
-    validation_subject_models,
-    trainer,
-    interpretabilty_model_io,
-    reuse_count=1000,
-):
-    device = model.device
-
-    # Train the interpretability model on all the subject models that are not
-    # going to be used for validation.
-    training_model_names, _ = get_matching_subject_models_names(
-        subject_model_path,
-        trainer=trainer,
-        task=task,
-        exclude=validation_subject_models,
-    )
-    # Use a subsample of the existing models at each RL step rather than constantly retraining the model on everything.
-    training_model_names = random.sample(
-        training_model_names, min([reuse_count, len(training_model_names)])
-    )
-    print(f"Using {len(training_model_names)} subject models")
-
-    wandb.log({"subject_model_count": training_model_names})
-    train_dataset = MultifunctionSubjectModelDataset(
-        subject_model_path, training_model_names
-    )
-    train_dataloader = DataLoader(
-        train_dataset,
-        batch_size=INTERPRETABILITY_BATCH_SIZE,
-        shuffle=True,
-        num_workers=0,
-    )
-
-    # The performance of the interpretability model is evaluated on the
-    # validation subject models, which were all created by the same trainer in
-    # this step.
-    eval_dataset = MultifunctionSubjectModelDataset(
-        subject_model_path, validation_subject_models
-    )
-    eval_dataloader = DataLoader(
-        eval_dataset,
-        batch_size=INTERPRETABILITY_BATCH_SIZE,
-        shuffle=True,
-        num_workers=0,
-    )
-
-    # TODO: Take these as a parameter as will vary by task and model.
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.00001, weight_decay=0.001)
-    criterion = nn.MSELoss()
-    epochs = 5
-
-    model.train()
-    for epoch in tqdm(range(epochs), desc="Interpretability model epochs"):
-        train_loss = 0.0
-        for i, (inputs, targets) in enumerate(train_dataloader):
-            optimizer.zero_grad()
-            outputs = model(inputs.to(device, non_blocking=True))
-            loss = criterion(outputs, targets.to(device, non_blocking=True))
-            loss.backward()
-            optimizer.step()
-            train_loss += loss
-
-    interpretabilty_model_io.write_model(f"{trainer.get_metadata()}", model)
-
-    model.eval()
-    with torch.no_grad():
-        eval_loss = 0.0
-        for inputs, targets in eval_dataloader:
-            outputs = model(inputs.to(device))
-            loss = criterion(outputs, targets.to(device))
-            eval_loss += loss.item()
-
-    return eval_loss / len(eval_dataloader), train_loss / len(train_dataloader)
-
-
 FROZEN_ONLY = "frozen_only"
 NON_FROZEN_ONLY = "non_frozen_only"
 BOTH = "both"
@@ -264,6 +195,9 @@ BOTH = "both"
 def get_matching_subject_models_names(
     model_writer, trainer, task=SimpleFunctionRecoveryTask, exclude=[], frozen=BOTH
 ):
+    """
+    Returns a list of subject model names that match the specified trainer and task by searching the index.txt file.
+    """
     matching_subject_models_names = []
     losses = []
     metadata = model_writer.get_metadata()
@@ -440,25 +374,6 @@ class Transformer(nn.Module, MetadataBase):
         x = x.transpose(1, 2)
         x = self.global_avg_pooling(x).squeeze(2)
         output = self.fc(x)
-        output = output.view(-1, *self.out_shape)
-        return output
-
-
-class LSTMClassifier(nn.Module):
-    def __init__(self, subject_model_parameter_count, out_shape, hidden_size=2048):
-        super(LSTMClassifier, self).__init__()
-        self.out_shape = out_shape
-        output_size = torch.zeros(out_shape).view(-1).shape[0]
-        self.lstm = nn.LSTM(
-            subject_model_parameter_count, hidden_size, batch_first=True, num_layers=3
-        )
-        self.fc = nn.Linear(hidden_size, output_size)
-        self.softmax = nn.Softmax(dim=1)
-
-    def forward(self, x):
-        x = x.unsqueeze(-1)
-        lstm_out, _ = self.lstm(x)
-        output = self.fc(lstm_out[:, -1, :])
         output = output.view(-1, *self.out_shape)
         return output
 

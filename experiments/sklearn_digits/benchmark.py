@@ -1,6 +1,7 @@
 from itertools import permutations, combinations
 import os
 import random
+from auto_mi.io import DirModelWriter
 
 import numpy as np
 from sklearn import datasets
@@ -13,7 +14,6 @@ from torch.utils.data import Dataset
 
 from auto_mi.base import MetadataBase
 from auto_mi.tasks import Task, Example, TRAIN, MI
-from auto_mi.utils import DirModelWriter, TarModelWriter
 from auto_mi.mi import FreezableClassifier
 from auto_mi.cli import train_cli
 

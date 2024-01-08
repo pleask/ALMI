@@ -1,23 +1,17 @@
-import argparse
 from itertools import permutations
-import os
 import random
 
 import torch
 import torch.nn.functional as F
-import torch.nn as nn
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset
 import torchvision
 import torchvision.transforms as transforms
-from tqdm import tqdm
-import wandb
+import torch.nn as nn
 
 from auto_mi.base import MetadataBase
-from auto_mi.rl import pretrain_subject_models
-from auto_mi.tasks import Task, Example, TRAIN, VAL
-from auto_mi.trainers import AdamTrainer
-from auto_mi.utils import DirModelWriter, TarModelWriter
-from auto_mi.mi import get_matching_subject_models_names, Transformer, MultifunctionSubjectModelDataset, train_mi_model
+from auto_mi.tasks import Task, Example, TRAIN
+from auto_mi.cli import train_cli
+from auto_mi.io import TarModelWriter, DirModelWriter
 
 
 TRAIN_RATIO = 0.7
@@ -110,71 +104,18 @@ class MNIST_CNN(nn.Module, MetadataBase):
         return F.log_softmax(x, dim=1)
 
 
-def evaluate(subject_model_io):
-    metadata = subject_model_io.get_metadata()
-    for model_idx in range(len(metadata)):
-        print(f'Model {model_idx}')
-        task = PermutedMNISTTask(seed=metadata[model_idx]['task']['seed'])
-        example = task.get_dataset(metadata[model_idx]['index'], type=VAL)
-        model_id = metadata[model_idx]['id']
-        permutation_map = metadata[model_idx]['example']['permutation_map']
-        print(f"Permutation map: {permutation_map}")
-        model = subject_model_io.get_model(MNIST_CNN(), model_id)
-        
-        for i in range(10):
-            image, label = example[-i]
-            prediction = model(image.unsqueeze(0))
-            print(prediction)
-            print(label, torch.argmax(prediction, -1).item())
-
-
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Run either pretraining or the full pipeline.')
-    parser.add_argument("--evaluate_subject_model", action='store_true', help="Evaluate a subject model.")
-    parser.add_argument("--train_subject_models", action='store_true', help="Train the subject models.")
-    parser.add_argument("--seed", type=float, help="Random seed.", default=0.)
-    parser.add_argument("--device", type=str, default="cuda", help="Device to train or evaluate models on")
-    parser.add_argument("--subject_model_path", type=str, help="Path of the subject models")
-    parser.add_argument("--interpretability_model_path", type=str, help="Path of the interpretability models")
-    args = parser.parse_args()
-
-    subject_model_io = TarModelWriter(args.subject_model_path)
-    interpretability_model_io = TarModelWriter(args.interpretability_model_path)
-
-    if args.evaluate_subject_model:
-        evaluate(subject_model_io)
-        quit()
-
-    task = PermutedMNISTTask(args.seed)
-    epochs = 30
-    trainer = AdamTrainer(task, epochs, 1000, lr=0.01, l1_penalty_weight=0., device=args.device)
-
-    subject_model = MNIST_CNN
-    sample_model = subject_model(task)
-    subject_model_parameter_count = sum(p.numel() for p in sample_model.parameters())
-    print('Layer parameters')
-    print(f'Subject model parameter count: {subject_model_parameter_count}', flush=True)
-
-    if args.train_subject_models:
-        base_net = MNIST_CNN()
-        model_path = f'experiments/mnist_permuted/base_net.pickle'
-        load_args = (model_path,) if args.device == 'cuda' else (model_path, {'map_location': torch.device('cpu')})
-        try:
-            base_net.load_state_dict(torch.load(*load_args))
-        except FileNotFoundError:
-            pass
-
-        l1_penalty_weights = [0.]
-        state_space = [trainer]
-
-
-        print('Pretraining subject models')
-        trainer = random.choice(state_space)
-        pretrain_subject_models(trainer, subject_model_io, subject_model, task, batch_size=5)
-    else:
-        wandb.init(project='bounding-mi', entity='patrickaaleask', reinit=True)
-
-        interpretability_model = Transformer(subject_model_parameter_count, task.mi_output_shape, hidden_size=256, num_layers=6, num_heads=8).to(args.device)
-        interpretability_model_parameter_count = sum(p.numel() for p in interpretability_model.parameters())
-        print(f'Interpretability model parameter count: {interpretability_model_parameter_count}')
-        train_mi_model(interpretability_model, interpretability_model_io, subject_model, subject_model_io, trainer, task, device=args.device)
+    train_cli(
+        ['mnist_permuted'],
+        TarModelWriter,
+        DirModelWriter,
+        PermutedMNISTTask,
+        MNIST_CNN,
+        default_subject_model_epochs=30,
+        default_subject_model_batch_size=1000,
+        default_subject_model_lr=0.01,
+        default_interpretability_model_num_layers=1,
+        default_interpretability_model_num_heads=2,
+        default_interpretability_model_positional_encoding_size=2048,
+        validate_on_non_frozen=True
+    )

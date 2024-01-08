@@ -5,7 +5,6 @@ from tqdm import tqdm
 import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader
-from torch.nn.utils.prune import L1Unstructured
 
 from .base import MetadataBase
 

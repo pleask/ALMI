@@ -3,13 +3,13 @@ CLI tools for running automated interpretability experiments.
 """
 import argparse
 import random
+from auto_mi.subject_models import train_subject_models
 
 import wandb
 
 from auto_mi.trainers import AdamTrainer
 from auto_mi.mi import Transformer, train_mi_model, evaluate_interpretability_model
-from auto_mi.rl import pretrain_subject_models
-from auto_mi.utils import evaluate_subject_model
+from auto_mi.subject_models import evaluate_subject_model
 
 
 def train_cli(
@@ -170,7 +170,7 @@ def train_cli(
 
         print("Pretraining subject models")
         trainer = random.choice(state_space)
-        pretrain_subject_models(
+        train_subject_models(
             trainer,
             subject_model_io,
             subject_model_class,

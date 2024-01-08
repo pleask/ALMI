@@ -12,7 +12,7 @@ from torch.utils.data import Dataset
 
 from auto_mi.base import MetadataBase
 from auto_mi.tasks import Task, Example, TRAIN
-from auto_mi.utils import DirModelWriter
+from auto_mi.io import DirModelWriter
 from auto_mi.cli import train_cli
 
 
@@ -101,6 +101,7 @@ class WineClassifier(nn.Module, MetadataBase):
 
 if __name__ == '__main__':
     train_cli(
+        
         DirModelWriter,
         DirModelWriter,
         PermutedWineTask,
