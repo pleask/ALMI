@@ -1,7 +1,6 @@
 bounding-mi/
 __pycache__/
 *.out
-*.pickle
 subject_models/
 subject-models/
 mi_models/
