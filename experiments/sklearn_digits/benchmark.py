@@ -19,7 +19,7 @@ from auto_mi.cli import train_cli
 
 
 TRAIN_RATIO = 0.7
-NUM_DIGITS = 3
+NUM_DIGITS = int(os.environ.get('NUM_DIGITS', 5))
 
 
 # TODO: commonise with other sklearn tasks
@@ -127,10 +127,7 @@ class FreezableDigitsClassifier(DigitsClassifier, FreezableClassifier):
         DigitsClassifier.__init__(self)
         FreezableClassifier.__init__(self, __file__)
         frozen_combinations = list(combinations(list(range(4)), 2)) + list(combinations(list(range(4)), 1)) + [tuple()]
-        try:
-            self.frozen = frozen_combinations[int(os.environ.get('FROZEN'))]
-        except TypeError:
-            self.frozen = frozen_combinations[0]
+        self.frozen = frozen_combinations[int(os.environ.get('FROZEN', 0))]
 
     def get_metadata(self):
         md = super().get_metadata()
@@ -152,5 +149,5 @@ if __name__ == '__main__':
         default_interpretability_model_num_layers=1,
         default_interpretability_model_num_heads=2,
         default_interpretability_model_positional_encoding_size=2048,
-        non_frozen_validate=True,
+        validate_on_non_frozen=True
     )

@@ -26,7 +26,7 @@ def train_cli(
     default_interpretability_model_positional_encoding_size=1024,
     default_interpretability_model_batch_size=2**5,
     default_interpretability_model_subject_model_count=-1,
-    non_frozen_validate=True,
+    validate_on_non_frozen=True
 ):
     """
     CLI wrapper for training subject models and interpretability models for a task set up.
@@ -201,5 +201,5 @@ def train_cli(
             device=args.device,
             batch_size=args.interpretability_model_batch_size,
             subject_model_count=args.interpretability_model_subject_model_count,
-            non_frozen_validate=non_frozen_validate,
+            validate_on_non_frozen=validate_on_non_frozen,
         )

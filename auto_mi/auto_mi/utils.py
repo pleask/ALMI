@@ -234,6 +234,7 @@ def evaluate_subject_model(
 ):
     metadata = subject_model_io.get_metadata()
     accuracies = []
+    # TODO: Use random models
     for model_idx in range(min(model_count, len(metadata))):
         print(f"Model {model_idx}")
         task = task_class(seed=metadata[model_idx]["task"]["seed"])
