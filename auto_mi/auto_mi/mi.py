@@ -90,8 +90,11 @@ def train_mi_model(
         optimizer, mode="min", patience=10, factor=0.1, verbose=True
     )
 
-    interpretability_model = torch.compile(interpretability_model)
-    torch.backends.cuda.matmul.allow_tf32 = True
+
+    device_cap = torch.cuda.get_device_capability()
+    if device_cap in ((7, 0), (8, 0), (9, 0)):
+        interpretability_model = torch.compile(interpretability_model)
+        torch.backends.cuda.matmul.allow_tf32 = True
 
     for epoch in tqdm(range(epochs), desc="Interpretability model epochs"):
         interpretability_model.train()
