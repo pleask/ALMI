@@ -12,7 +12,6 @@ from tqdm import tqdm
 
 from auto_mi.tasks import MI
 from auto_mi.base import MetadataBase
-from auto_mi.tasks import SimpleFunctionRecoveryTask
 
 VAL_RATIO = 0.2
 TRAIN_RATIO = 0.8
@@ -193,7 +192,7 @@ BOTH = "both"
 
 
 def get_matching_subject_models_names(
-    model_writer, trainer, task=SimpleFunctionRecoveryTask, exclude=[], frozen=BOTH
+    model_writer, trainer, task, exclude=[], frozen=BOTH
 ):
     """
     Returns a list of subject model names that match the specified trainer and task by searching the index.txt file.
