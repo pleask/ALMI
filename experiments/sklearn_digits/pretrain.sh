@@ -3,8 +3,10 @@
 #SBATCH -c 4
 #SBATCH -p res-gpu-small
 #SBATCH --qos=short
+#SBATCH --time=1-00:00:00
 #SBATCH --output=sklearn_digits/outs/slurm-%j.out
 #SBATCH --array=0-65
+#SBATCH --gres=gpu
 
 source /etc/profile
 module load cuda/11.7
