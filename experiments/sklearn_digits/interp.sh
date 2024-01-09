@@ -3,7 +3,7 @@
 #SBATCH -c 4
 #SBATCH -p res-gpu-small
 #SBATCH --qos=short
-#SBATCH --time=1-00:00:00
+#SBATCH --time=2-00:00:00
 #SBATCH --output=sklearn_digits/outs/slurm-%j.out
 #SBATCH --array=0-5
 #SBATCH --gres=gpu:ampere:1
