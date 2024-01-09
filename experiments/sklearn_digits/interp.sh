@@ -6,7 +6,7 @@
 #SBATCH --time=1-00:00:00
 #SBATCH --output=sklearn_digits/outs/slurm-%j.out
 #SBATCH --array=0-5
-#SBATCH --gres=gpu
+#SBATCH --gres=gpu:ampere:1
 
 source /etc/profile
 module load cuda/11.7

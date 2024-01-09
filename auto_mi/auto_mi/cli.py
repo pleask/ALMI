@@ -2,14 +2,14 @@
 CLI tools for running automated interpretability experiments.
 """
 import argparse
+import os
 import random
-from auto_mi.subject_models import train_subject_models
 
 import wandb
 
 from auto_mi.trainers import AdamTrainer
 from auto_mi.mi import Transformer, train_mi_model, evaluate_interpretability_model
-from auto_mi.subject_models import evaluate_subject_model
+from auto_mi.subject_models import evaluate_subject_model, train_subject_models
 
 
 def train_cli(
@@ -184,6 +184,8 @@ def train_cli(
             reinit=True,
             tags=tags,
         )
+        wandb.config.update(args)
+        wandb.config.update(os.environ)
 
         interpretability_model_parameter_count = sum(
             p.numel() for p in interpretability_model.parameters()
