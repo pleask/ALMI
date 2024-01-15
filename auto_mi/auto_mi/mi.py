@@ -21,6 +21,7 @@ CRITERION = nn.BCEWithLogitsLoss()
 
 # TODO: subject_model can go into the IO class rather than be passed in here
 def train_mi_model(
+    run,
     interpretability_model,
     interpretability_model_io,
     subject_model,
@@ -32,37 +33,23 @@ def train_mi_model(
     device="cuda",
     lr=1e-5,
     subject_model_count=-1,
-    validate_on_non_frozen=True,
+    frozen_layers=None,
 ):
     """
     Trains an interpretability transformer model on the specified subject models.
-
-    validate_on_non_frozen: If set to true, validates only on non-frozen models.
     """
-    if validate_on_non_frozen:
-        frozen_subject_models, _ = get_matching_subject_models_names(
-            subject_model_io, trainer, task=task, frozen=FROZEN_ONLY
-        )
-        non_frozen_subject_models, _ = get_matching_subject_models_names(
-            subject_model_io, trainer, task=task, frozen=NON_FROZEN_ONLY
-        )
-        train_non_frozen = non_frozen_subject_models[
-            int(VAL_RATIO * len(non_frozen_subject_models)) :
-        ]
-        validation_models = non_frozen_subject_models[
-            : int(VAL_RATIO * len(non_frozen_subject_models))
-        ]
-        train_models = frozen_subject_models + train_non_frozen
-    else:
-        all_subject_models, _ = get_matching_subject_models_names(
-            subject_model_io, trainer, task=task
-        )
-        if subject_model_count > 0:
-            all_subject_models = all_subject_models[:subject_model_count]
-        validation_models, train_models = (
-            all_subject_models[: int(VAL_RATIO * len(all_subject_models))],
-            all_subject_models[int(VAL_RATIO * len(all_subject_models)) :],
-        )
+    all_subject_models, _ = get_matching_subject_models_names(
+        subject_model_io,
+        trainer,
+        task=task,
+        frozen_layers=frozen_layers,
+    )
+    if subject_model_count > 0:
+        all_subject_models = all_subject_models[:subject_model_count]
+    validation_models, train_models = (
+        all_subject_models[: int(VAL_RATIO * len(all_subject_models))],
+        all_subject_models[int(VAL_RATIO * len(all_subject_models)) :],
+    )
 
     total_model_count = len(validation_models) + len(train_models)
     if total_model_count == 0:
@@ -71,25 +58,66 @@ def train_mi_model(
     print(f"Using {total_model_count} subject models")
 
     train_dataset = MultifunctionSubjectModelDataset(
-        subject_model_io, train_models, task, subject_model, normalise=True
+        subject_model_io,
+        train_models,
+        task,
+        subject_model,
+        normalise=True,
+        frozen_layers=frozen_layers,
     )
     train_dataloader = DataLoader(
         train_dataset, batch_size=batch_size, shuffle=True, pin_memory=True
     )
-    validation_dataset = MultifunctionSubjectModelDataset(
-        subject_model_io, validation_models, task, subject_model, normalise=True
-    )
-    validation_dataloader = DataLoader(
-        validation_dataset, batch_size=batch_size, shuffle=True, pin_memory=True
+
+    # Split the validation models into groups with the same frozen layers for better logging to wandb.
+    frozen_layers_to_ids = {}
+    # the dataset metadata has all the models in the directory, regardless of
+    # whether they are used in the training dataset
+    for id in validation_models:
+        try:
+            frozen_layers = tuple(train_dataset.metadata[id]["model"]["frozen"])
+            if frozen_layers in frozen_layers_to_ids:
+                frozen_layers_to_ids[frozen_layers].append(id)
+            else:
+                frozen_layers_to_ids[frozen_layers] = [id]
+        except KeyError:
+            pass
+    validation_dataloaders = {}
+    for frozen_layers, ids in frozen_layers_to_ids.items():
+        validation_dataloaders[frozen_layers] = DataLoader(
+            MultifunctionSubjectModelDataset(
+                subject_model_io,
+                ids,
+                task,
+                subject_model,
+                normalise=True,
+                frozen_layers=frozen_layers,
+            ),
+            batch_size=batch_size,
+            shuffle=True,
+            pin_memory=True,
+        )
+
+    # Log a histogram of the subject model losses
+    subject_model_losses = [
+        train_dataset.metadata[id]["loss"] for id in train_models + validation_models
+    ]
+    data = [[s] for s in subject_model_losses]
+    table = wandb.Table(data=data, columns=["losses"])
+    wandb.log(
+        {
+            "my_histogram": wandb.plot.histogram(
+                table, "losses", title="Subject model losses"
+            )
+        }
     )
 
     optimizer = torch.optim.Adam(
         interpretability_model.parameters(), lr=lr, weight_decay=0.001
     )
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, mode="min", patience=10, factor=0.1, verbose=True
+        optimizer, mode="min", patience=20, factor=0.1, verbose=True
     )
-
 
     device_cap = torch.cuda.get_device_capability()
     if device_cap in ((7, 0), (8, 0), (9, 0)):
@@ -111,33 +139,52 @@ def train_mi_model(
 
         scheduler.step(loss)
         eval_loss, accuracy = _evaluate(
-            interpretability_model, validation_dataloader, device=device
+            interpretability_model, validation_dataloaders, device=device
         )
-        wandb.log({"validation_loss": eval_loss, "validation_accuracy": accuracy})
+        wandb.log({
+            **{
+                f"validation_loss_{frozen_layers}": loss
+                for frozen_layers, loss in eval_loss.items()
+            },
+            **{
+                f"validation_accuracy_{frozen_layers}": acc
+                for frozen_layers, acc in accuracy.items()
+            },
+        })
 
-        # TODO: Save to a more usable filename
         interpretability_model_io.write_model(
-            f"{trainer.get_metadata()}", interpretability_model
+            run.id, interpretability_model
         )
 
 
-def _evaluate(interpretability_model, validation_dataloader, device="cuda"):
+def _evaluate(interpretability_model, validation_dataloaders, device="cuda"):
+    accuracies = {}
+    eval_losses = {}
+
     interpretability_model.eval()
     with torch.no_grad():
-        eval_loss = 0.0
-        for inputs, targets in validation_dataloader:
-            outputs = interpretability_model(inputs.to(device))
-            loss = CRITERION(outputs, targets.to(device))
-            eval_loss += loss.item()
+        for frozen_layers, validation_dataloader in validation_dataloaders.items():
+            eval_loss = 0.0
+            accuracy = 0.0
+            for inputs, targets in validation_dataloader:
+                outputs = interpretability_model(inputs.to(device))
+                loss = CRITERION(outputs, targets.to(device))
+                eval_loss += loss.item()
+                predicted_classes = torch.argmax(outputs, dim=-1)
+                target_classes = torch.argmax(targets, dim=-1)
+                accuracy += torch.sum(
+                    torch.all(
+                        predicted_classes.detach().cpu() == target_classes.cpu(), dim=1
+                    )
+                ).item() / len(predicted_classes)
 
-        eval_loss /= len(validation_dataloader)
+            eval_loss /= len(validation_dataloader)
+            eval_losses[frozen_layers] = eval_loss
 
-        predicted_classes = torch.argmax(outputs, dim=-1)
-        target_classes = torch.argmax(targets, dim=-1)
-        accuracy = torch.sum(
-            torch.all(predicted_classes.detach().cpu() == target_classes.cpu(), dim=1)
-        ).item() / len(predicted_classes)
-    return eval_loss, accuracy
+            accuracy /= len(validation_dataloader)
+            accuracies[frozen_layers] = accuracy
+
+    return eval_losses, accuracies
 
 
 def evaluate_interpretability_model(
@@ -148,7 +195,6 @@ def evaluate_interpretability_model(
     subject_model_io,
     task,
     trainer,
-    validate_on_non_frozen=True,
     subject_model_count=100,
     batch_size=2**5,
     device="cuda",
@@ -158,47 +204,18 @@ def evaluate_interpretability_model(
 
     validate_on_non_frozen: If set to true, validates only on non-frozen models.
     """
-    if not validate_on_non_frozen:
-        raise NotImplementedError
-
-    validation_models, _ = get_matching_subject_models_names(
-        subject_model_io, trainer, task=task, frozen=NON_FROZEN_ONLY
-    )
-    validation_models = random.sample(validation_models, subject_model_count)
-    print(validation_models)
-    validation_dataset = MultifunctionSubjectModelDataset(
-        subject_model_io,
-        validation_models,
-        task,
-        subject_model,
-        normalise=True,
-    )
-    validation_dataloader = DataLoader(
-        validation_dataset,
-        batch_size=batch_size,
-        shuffle=True,
-        pin_memory=True,
-    )
-
-    interpretability_model = interpretability_model_io.get_model(
-        interpretability_model, interpretability_model_id, device=device
-    )
-    _, accuracy = _evaluate(
-        interpretability_model, validation_dataloader, device=device
-    )
-    print(f"Evaluation accuracy: {accuracy}")
-
-
-FROZEN_ONLY = "frozen_only"
-NON_FROZEN_ONLY = "non_frozen_only"
-BOTH = "both"
+    raise NotImplementedError("Method removed in favour of wandb logging.")
 
 
 def get_matching_subject_models_names(
-    model_writer, trainer, task, exclude=[], frozen=BOTH
+    model_writer, trainer, task, exclude=[], frozen_layers=None
 ):
     """
-    Returns a list of subject model names that match the specified trainer and task by searching the index.txt file.
+    Returns a list of subject model names that match the specified trainer and
+    task by searching the index.txt file.
+
+    frozen_layers: If set to a tuple, returns only models that
+    have the layers specified in the tuple frozen.
     """
     matching_subject_models_names = []
     losses = []
@@ -224,21 +241,17 @@ def get_matching_subject_models_names(
             print("does not exist")
             continue
 
-        if frozen == FROZEN_ONLY:
+        if frozen_layers is not None:
             try:
-                if len(md["model"]["frozen"]) == 0:
-                    continue
-            except KeyError:
-                continue
-        if frozen == NON_FROZEN_ONLY:
-            try:
-                if len(md["model"]["frozen"]) != 0:
+                if set(md["model"]["frozen"]) != set(frozen_layers):
                     continue
             except KeyError:
                 continue
 
         matching_subject_models_names.append(md["id"])
         losses.append(md["loss"])
+
+    random.shuffle(matching_subject_models_names)
 
     return matching_subject_models_names, sum(losses) / len(losses) if losses else 0
 
@@ -252,12 +265,14 @@ class MultifunctionSubjectModelDataset(Dataset):
         subject_model,
         normalise=False,
         device="cpu",
+        frozen_layers=None,
     ):
         self._model_loader = model_loader
         self.subject_model_ids = subject_model_ids
         self.device = device
         self.task = task
         self.subject_model = subject_model
+        self.frozen_layers = frozen_layers
 
         self.metadata = self._index_metadata()
         self._data = [None for _ in self.subject_model_ids]
@@ -286,13 +301,21 @@ class MultifunctionSubjectModelDataset(Dataset):
 
         model = self._model_loader.get_model(self.subject_model(self.task), name)
 
+        frozen_param_count = 0
+        if self.frozen_layers is not None:
+            # count the number of parameters in the frozen layers
+            for i, param in enumerate(model.parameters()):
+                if i // 2 in self.frozen_layers:
+                    frozen_param_count += param.numel()
+
         x = torch.concat(
             [param.detach().reshape(-1) for _, param in model.named_parameters()]
         )
+
+        x = x[frozen_param_count:]
+
         if self._normalise:
             x = (x - self._mean) / self._std
-
-        # x = x[-2740:]
 
         self._data[idx] = (x, y)
 

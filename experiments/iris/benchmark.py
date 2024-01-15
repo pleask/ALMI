@@ -55,6 +55,7 @@ class IrisClassifier(nn.Module, MetadataBase):
 
 if __name__ == '__main__':
     train_cli(
+        ['irises'],
         DirModelWriter,
         DirModelWriter,
         PermutedIrisTask,

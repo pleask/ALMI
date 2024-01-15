@@ -137,7 +137,7 @@ class FreezableDigitsClassifier(DigitsClassifier, FreezableClassifier):
 
 if __name__ == '__main__':
     train_cli(
-        [f'sklearn_digits', f'{NUM_DIGITS} digits'],
+        ['sklearn_digits'],
         DirModelWriter,
         DirModelWriter,
         PermutedDigitsTask,
@@ -149,5 +149,4 @@ if __name__ == '__main__':
         default_interpretability_model_num_layers=1,
         default_interpretability_model_num_heads=2,
         default_interpretability_model_positional_encoding_size=2048,
-        validate_on_non_frozen=True
     )

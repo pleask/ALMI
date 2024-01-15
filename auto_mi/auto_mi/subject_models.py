@@ -21,6 +21,7 @@ def train_subject_models(task, model, trainer, model_writer, count=10, device="c
         [task.get_dataset(i, type=VAL) for i in range(count)],
     )
 
+    print('Writing models to disk...')
     model_ids = []
     for i, (net, target, loss, train_loss) in enumerate(
         zip(nets, targets, losses, train_losses)

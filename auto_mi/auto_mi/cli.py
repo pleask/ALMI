@@ -26,7 +26,6 @@ def train_cli(
     default_interpretability_model_positional_encoding_size=1024,
     default_interpretability_model_batch_size=2**5,
     default_interpretability_model_subject_model_count=-1,
-    validate_on_non_frozen=True
 ):
     """
     CLI wrapper for training subject models and interpretability models for a task set up.
@@ -77,7 +76,7 @@ def train_cli(
     subject_model_group.add_argument(
         "--subject_model_batch_size",
         type=str,
-        help="Learning rate for training the subject models",
+        help="Batch size for training the subject models",
         default=default_subject_model_batch_size,
     )
 
@@ -103,7 +102,7 @@ def train_cli(
     )
     interpretability_model_group.add_argument(
         "--interpretability_model_positional_encoding_size",
-        type=str,
+        type=int,
         help="Number of layers for the transformer model.",
         default=default_interpretability_model_positional_encoding_size,
     )
@@ -119,10 +118,35 @@ def train_cli(
         help="Number of subject models to use for training the interpretability model.",
         default=default_interpretability_model_subject_model_count,
     )
-    subject_model_group.add_argument(
+    interpretability_model_group.add_argument(
         "--evaluate_interpretability_model",
         type=str,
         help="Evaluate an interpretability model.",
+    )
+    interpretability_model_group.add_argument(
+        "--interpretability_model_frozen_layers",
+        nargs="+",
+        type=int,
+        default=None,
+        help="Only use subject models that match these frozen layers.",
+    )
+    interpretability_model_group.add_argument(
+        "--interpretability_model_lr",
+        type=float,
+        default=1e-5,
+        help="Learning rate for training the interpretability model.",
+    )
+    interpretability_model_group.add_argument(
+        "--interpretability_model_resume",
+        type=str,
+        default='',
+        help="W&B run ID of a run to resume training.",
+    )
+    subject_model_group.add_argument(
+        "--interpretability_model_epochs",
+        type=int,
+        help="Number of epochs to train the interpretability models.",
+        default=default_subject_model_epochs,
     )
     args = parser.parse_args()
 
@@ -142,6 +166,7 @@ def train_cli(
         lr=args.subject_model_lr,
         device=args.device,
     )
+
     interpretability_model = Transformer(
         subject_model_parameter_count,
         task.mi_output_shape,
@@ -149,6 +174,10 @@ def train_cli(
         num_heads=args.interpretability_model_num_heads,
         positional_encoding_size=args.interpretability_model_positional_encoding_size,
     ).to(args.device)
+    if args.interpretability_model_resume:
+        interpretability_model = interpretability_model_io.get_model(
+            interpretability_model, args.interpretability_model_resume
+        )
 
     if args.evaluate_subject_models:
         evaluate_subject_model(task_class, subject_model_class, subject_model_io)
@@ -171,29 +200,35 @@ def train_cli(
         print("Pretraining subject models")
         trainer = random.choice(state_space)
         train_subject_models(
+            task,
+            subject_model_class,
             trainer,
             subject_model_io,
-            subject_model_class,
-            task,
-            batch_size=args.subject_model_count,
+            count=args.subject_model_count,
         )
     else:
-        wandb.init(
+        wandb_kwargs = {}
+        if args.interpretability_model_resume:
+            wandb_kwargs['resume'] = True
+            wandb_kwargs['id'] = args.interpretability_model_resume
+        run = wandb.init(
             project="bounding-mi",
             entity="patrickaaleask",
             reinit=True,
             tags=tags,
+            **wandb_kwargs
         )
-        wandb.config.update(args)
-        wandb.config.update(os.environ)
+        wandb.config.update(args, allow_val_change=True)
+        wandb.config.update({'num_classes': task.output_shape[0]})
 
         interpretability_model_parameter_count = sum(
             p.numel() for p in interpretability_model.parameters()
         )
         print(
-            f"Interpretability model parameter count: {interpretability_model_parameter_count}"
+            f"Interpretability model parameter count: {'{:,}'.format(interpretability_model_parameter_count)}"
         )
         train_mi_model(
+            run,
             interpretability_model,
             interpretability_model_io,
             subject_model_class,
@@ -203,5 +238,7 @@ def train_cli(
             device=args.device,
             batch_size=args.interpretability_model_batch_size,
             subject_model_count=args.interpretability_model_subject_model_count,
-            validate_on_non_frozen=validate_on_non_frozen,
+            frozen_layers=args.interpretability_model_frozen_layers,
+            lr=args.interpretability_model_lr,
+            epochs=args.interpretability_model_epochs,
         )
