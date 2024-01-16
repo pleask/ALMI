@@ -32,6 +32,10 @@ class PermutedDigitsExample(SimpleExample):
         y = digits_dataset.target
         return X, y
 
+    def __getitem__(self, i):
+        X, y = super().__getitem__(i)
+        return X.reshape(8, 8), y
+
 
 class DigitsClassifier(nn.Module, MetadataBase):
     def __init__(self, *_):

@@ -34,6 +34,8 @@ def train_mi_model(
     lr=1e-5,
     subject_model_count=-1,
     frozen_layers=None,
+    num_classes=-1,
+    subject_model_example_count=-1,
 ):
     """
     Trains an interpretability transformer model on the specified subject models.
@@ -43,6 +45,8 @@ def train_mi_model(
         trainer,
         task=task,
         frozen_layers=frozen_layers,
+        num_classes=num_classes,
+        subject_model_example_count=subject_model_example_count,
     )
     if subject_model_count > 0:
         all_subject_models = all_subject_models[:subject_model_count]
@@ -141,20 +145,20 @@ def train_mi_model(
         eval_loss, accuracy = _evaluate(
             interpretability_model, validation_dataloaders, device=device
         )
-        wandb.log({
-            **{
-                f"validation_loss_{frozen_layers}": loss
-                for frozen_layers, loss in eval_loss.items()
-            },
-            **{
-                f"validation_accuracy_{frozen_layers}": acc
-                for frozen_layers, acc in accuracy.items()
-            },
-        })
-
-        interpretability_model_io.write_model(
-            run.id, interpretability_model
+        wandb.log(
+            {
+                **{
+                    f"validation_loss_{frozen_layers}": loss
+                    for frozen_layers, loss in eval_loss.items()
+                },
+                **{
+                    f"validation_accuracy_{frozen_layers}": acc
+                    for frozen_layers, acc in accuracy.items()
+                },
+            }
         )
+
+        interpretability_model_io.write_model(run.id, interpretability_model)
 
 
 def _evaluate(interpretability_model, validation_dataloaders, device="cuda"):
@@ -208,7 +212,13 @@ def evaluate_interpretability_model(
 
 
 def get_matching_subject_models_names(
-    model_writer, trainer, task, exclude=[], frozen_layers=None
+    model_writer,
+    trainer,
+    task,
+    exclude=[],
+    frozen_layers=None,
+    num_classes=-1,
+    subject_model_example_count=-1,
 ):
     """
     Returns a list of subject model names that match the specified trainer and
@@ -246,6 +256,14 @@ def get_matching_subject_models_names(
                 if set(md["model"]["frozen"]) != set(frozen_layers):
                     continue
             except KeyError:
+                continue
+
+        if num_classes > 0:
+            if md["task"]["num_classes"] != num_classes:
+                continue
+
+        if subject_model_example_count > 0:
+            if md["task"]["num_examples"] != subject_model_example_count:
                 continue
 
         matching_subject_models_names.append(md["id"])
@@ -369,6 +387,7 @@ class Transformer(nn.Module, MetadataBase):
     ):
         super().__init__()
         self.out_shape = out_shape
+
         output_size = torch.zeros(out_shape).view(-1).shape[0]
         self.positional_encoding = PositionalEncoding(
             positional_encoding_size, subject_model_parameter_count

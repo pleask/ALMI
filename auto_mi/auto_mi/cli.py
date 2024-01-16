@@ -85,6 +85,12 @@ def train_cli(
         help="Number of classes to use from the training data. If -1, use all classes.",
         default=-1,
     )
+    subject_model_group.add_argument(
+        "--subject_model_example_count",
+        type=int,
+        help="Number of examples to use from the training data for training the subject models. If -1, use all examples.",
+        default=-1,
+    )
 
     interpretability_model_group = parser.add_argument_group(
         "Interpretability Model Arguments"
@@ -145,7 +151,7 @@ def train_cli(
     interpretability_model_group.add_argument(
         "--interpretability_model_resume",
         type=str,
-        default='',
+        default="",
         help="W&B run ID of a run to resume training.",
     )
     subject_model_group.add_argument(
@@ -160,7 +166,11 @@ def train_cli(
     interpretability_model_io = interpretability_model_io_class(
         args.interpretability_model_path
     )
-    task = task_class(args.seed, num_classes=args.subject_model_num_classes)
+    task = task_class(
+        seed=args.seed,
+        num_classes=args.subject_model_num_classes,
+        num_examples=args.subject_model_example_count,
+    )
     sample_model = subject_model_class(task)
     subject_model_parameter_count = sum(p.numel() for p in sample_model.parameters())
     print(f"Subject model parameter count: {subject_model_parameter_count}", flush=True)
@@ -212,17 +222,17 @@ def train_cli(
     else:
         wandb_kwargs = {}
         if args.interpretability_model_resume:
-            wandb_kwargs['resume'] = True
-            wandb_kwargs['id'] = args.interpretability_model_resume
+            wandb_kwargs["resume"] = True
+            wandb_kwargs["id"] = args.interpretability_model_resume
         run = wandb.init(
             project="bounding-mi",
             entity="patrickaaleask",
             reinit=True,
             tags=tags,
-            **wandb_kwargs
+            **wandb_kwargs,
         )
         wandb.config.update(args, allow_val_change=True)
-        wandb.config.update({'num_classes': task.output_shape[0]})
+        wandb.config.update({"num_classes": task.output_shape[0]})
 
         interpretability_model_parameter_count = sum(
             p.numel() for p in interpretability_model.parameters()
@@ -244,4 +254,6 @@ def train_cli(
             frozen_layers=args.interpretability_model_frozen_layers,
             lr=args.interpretability_model_lr,
             epochs=args.interpretability_model_epochs,
+            num_classes=args.subject_model_num_classes,
+            subject_model_example_count=args.subject_model_example_count,
         )
