@@ -13,89 +13,24 @@ import torch.nn as nn
 from torch.utils.data import Dataset
 
 from auto_mi.base import MetadataBase
-from auto_mi.tasks import Task, Example, TRAIN, MI
+from auto_mi.tasks import SimpleTask, SimpleExample, TRAIN, MI
 from auto_mi.mi import FreezableClassifier
 from auto_mi.cli import train_cli
 
 
 TRAIN_RATIO = 0.7
 
-# TODO: commonise with other sklearn tasks
-class PermutedDigitsTask(Task):
-    def __init__(self, seed=0., train=True, num_classes=-1, **kwargs):
-        super().__init__(seed=seed, train=train, num_classes=num_classes)
-        p = list(permutations(range(num_classes)))
-        # Shuffle the permutations so we see examples where all output classes
-        # are remapped.
-        r = random.Random(seed)
-        r.shuffle(p)
-        self._permutations = p
-
-    def get_dataset(self, i, type=TRAIN, **_) -> Dataset:
-        """
-        Gets the dataset for the ith example of this task.
-        """
-        return PermutedDigitsExample(self._permutations[i % len(self._permutations)], type=type, num_classes=self.num_classes)
-
-    @property
-    def input_shape(self):
-        return (8, 8,)
-
-    @property
-    def output_shape(self):
-        return (self.num_classes, )
-
-    @property
-    def mi_output_shape(self):
-        return (self.num_classes, self.num_classes)
-
-    def criterion(self, x, y):
-        return F.nll_loss(x, y)
+class PermutedDigitsTask(SimpleTask):
+    def __init__(self, **kwargs):
+        super().__init__(PermutedDigitsExample, (8, 8,), **kwargs)
 
 
-class PermutedDigitsExample(Example):
-    def __init__(self, permutation_map, type=TRAIN, num_classes=-1):
-        self._permutation_map = permutation_map
-
-        if type==MI:
-            return
-
+class PermutedDigitsExample(SimpleExample):
+    def _get_dataset(self):
         digits_dataset = datasets.load_digits()
         X = digits_dataset.data
         y = digits_dataset.target
-
-        # Filter down to just num_classes classes
-        example_mask = [_y < num_classes for _y in y]
-        X = [x for x, t in zip(X, example_mask) if t]
-        y = [_y for _y, t in zip(y, example_mask) if t]
-
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
-        scaler = StandardScaler()
-        X_train = scaler.fit_transform(X_train)
-        X_test = scaler.transform(X_test)
-
-
-        if type == TRAIN:
-            self.X = X_train
-            self.y = y_train
-        else:
-            self.X = X_test
-            self.y = y_test
-
-    def __getitem__(self, i):
-        x = self.X[i].astype(np.float32)
-        y = self.y[i]
-        return x.reshape((8, 8)), self._permutation_map[y]
-
-    def __len__(self):
-        return len(self.X)
-
-    def get_metadata(self):
-        return {'permutation_map': self._permutation_map}
-    
-    def get_target(self):
-        return F.one_hot(torch.tensor(self._permutation_map)).to(torch.float32)
+        return X, y
 
 
 class DigitsClassifier(nn.Module, MetadataBase):

@@ -10,7 +10,7 @@ import torch.nn as nn
 import wandb
 
 from auto_mi.base import MetadataBase
-from auto_mi.tasks import TRAIN, VAL, SklearnTask
+from auto_mi.tasks import TRAIN, VAL, SimpleTask
 from auto_mi.trainers import AdamTrainer
 from auto_mi.io import TarModelWriter
 from auto_mi.mi import PositionalEncoding, Transformer, train_mi_model
@@ -18,7 +18,7 @@ from auto_mi.tasks import SimpleExample
 from auto_mi.cli import train_cli
 
 
-class PermutedIrisTask(SklearnTask):
+class PermutedIrisTask(SimpleTask):
     def __init__(self, seed=0., train=True, **kwargs):
         super().__init__(PermutedIrisExample, (4,), 3, seed=seed, train=train)
 
