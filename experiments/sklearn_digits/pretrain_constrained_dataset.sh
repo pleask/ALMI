@@ -29,7 +29,7 @@ case $EXAMPLE_COUNT_GROUP in
     3) EXAMPLE_COUNT=500;;
     4) EXAMPLE_COUNT=1000;;
     5) EXAMPLE_COUNT=-1;;
-    *) echo "Invalid group"; exit 1;;
+    *) echo "Invalid group" $EXAMPLE_COUNT; exit 1;;
 esac
 
 FROZEN=$FROZEN WANDB_DISABLED=true stdbuf -oL /home3/wclv88/bounding-mi/bin/python bounding-mi-repo/experiments/sklearn_digits/benchmark.py --seed 0 --device cuda --train_subject_models --subject_model_count $SUBJECT_MODEL_COUNT --subject_model_path sklearn_digits/constrained_data/subject-models --subject_model_num_classes 4 --subject_model_example_count $EXAMPLE_COUNT
