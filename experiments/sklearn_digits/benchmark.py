@@ -19,14 +19,12 @@ from auto_mi.cli import train_cli
 
 
 TRAIN_RATIO = 0.7
-NUM_DIGITS = int(os.environ.get('NUM_DIGITS', 5))
-
 
 # TODO: commonise with other sklearn tasks
 class PermutedDigitsTask(Task):
-    def __init__(self, seed=0., train=True, **kwargs):
-        super().__init__(seed=seed, train=train)
-        p = list(permutations(range(NUM_DIGITS)))
+    def __init__(self, seed=0., train=True, num_classes=-1, **kwargs):
+        super().__init__(seed=seed, train=train, num_classes=num_classes)
+        p = list(permutations(range(num_classes)))
         # Shuffle the permutations so we see examples where all output classes
         # are remapped.
         r = random.Random(seed)
@@ -37,7 +35,7 @@ class PermutedDigitsTask(Task):
         """
         Gets the dataset for the ith example of this task.
         """
-        return PermutedDigitsExample(self._permutations[i % len(self._permutations)], type=type)
+        return PermutedDigitsExample(self._permutations[i % len(self._permutations)], type=type, num_classes=self.num_classes)
 
     @property
     def input_shape(self):
@@ -45,18 +43,18 @@ class PermutedDigitsTask(Task):
 
     @property
     def output_shape(self):
-        return (NUM_DIGITS, )
+        return (self.num_classes, )
 
     @property
     def mi_output_shape(self):
-        return (NUM_DIGITS, NUM_DIGITS)
+        return (self.num_classes, self.num_classes)
 
     def criterion(self, x, y):
         return F.nll_loss(x, y)
 
 
 class PermutedDigitsExample(Example):
-    def __init__(self, permutation_map, type=TRAIN):
+    def __init__(self, permutation_map, type=TRAIN, num_classes=-1):
         self._permutation_map = permutation_map
 
         if type==MI:
@@ -66,8 +64,8 @@ class PermutedDigitsExample(Example):
         X = digits_dataset.data
         y = digits_dataset.target
 
-        # Filter down to just NUM_DIGITS classes
-        example_mask = [_y < NUM_DIGITS for _y in y]
+        # Filter down to just num_classes classes
+        example_mask = [_y < num_classes for _y in y]
         X = [x for x, t in zip(X, example_mask) if t]
         y = [_y for _y, t in zip(y, example_mask) if t]
 

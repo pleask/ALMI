@@ -79,6 +79,12 @@ def train_cli(
         help="Batch size for training the subject models",
         default=default_subject_model_batch_size,
     )
+    subject_model_group.add_argument(
+        "--subject_model_num_classes",
+        type=int,
+        help="Number of classes to use from the training data. If -1, use all classes.",
+        default=-1,
+    )
 
     interpretability_model_group = parser.add_argument_group(
         "Interpretability Model Arguments"
@@ -154,7 +160,7 @@ def train_cli(
     interpretability_model_io = interpretability_model_io_class(
         args.interpretability_model_path
     )
-    task = task_class(args.seed)
+    task = task_class(args.seed, num_classes=args.subject_model_num_classes)
     sample_model = subject_model_class(task)
     subject_model_parameter_count = sum(p.numel() for p in sample_model.parameters())
     print(f"Subject model parameter count: {subject_model_parameter_count}", flush=True)

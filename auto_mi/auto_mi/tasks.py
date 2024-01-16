@@ -14,12 +14,13 @@ VAL = 'val'
 MI = 'mi'
 
 class Task(MetadataBase, ABC):
-    def __init__(self, seed=0., train=True, **_):
+    def __init__(self, seed=0., train=True, num_classes=-1, **_):
         """
         seed: The seed to use for randomly generating examples of this task.
         """
         self.seed = seed
         self.train = train
+        self.num_classes = num_classes
 
     @abstractmethod
     def get_dataset(self, i, type=TRAIN) -> Dataset:
@@ -54,10 +55,9 @@ class Example(MetadataBase, Dataset, ABC):
 
 
 class SklearnTask(Task):
-    def __init__(self, example_class, input_shape, num_classes, seed=0., train=True, **kwargs):
-        super().__init__(seed=seed, train=train)
+    def __init__(self, example_class, input_shape, num_classes=-1, seed=0., train=True, **kwargs):
+        super().__init__(seed=seed, train=train, num_classes=num_classes)
         self._input_shape = input_shape
-        self.num_classes = num_classes
         self.permutations = list(permutations(range(num_classes)))
         self.example_class = example_class
 
