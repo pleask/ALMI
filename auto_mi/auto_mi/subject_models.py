@@ -1,9 +1,11 @@
+import random
+from time import gmtime, strftime
+import uuid
+
+import torch
+
 from auto_mi.mi import TRAIN_RATIO
 from auto_mi.tasks import VAL
-
-
-import uuid
-from time import gmtime, strftime
 
 
 def train_subject_models(task, model, trainer, model_writer, count=10, device="cpu"):

@@ -195,10 +195,7 @@ def train_cli(
         quit()
 
     if args.train_subject_models:
-        state_space = [trainer]
-
         print("Pretraining subject models")
-        trainer = random.choice(state_space)
         train_subject_models(
             task,
             subject_model_class,
