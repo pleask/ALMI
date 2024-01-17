@@ -1,0 +1,3 @@
+SLURM scripts for running experiments on subject models where the number of examples used to train them has been constrained.
+
+These experiments are to evaluate how the quality of the representations in the networks affects our ability to interpret them. When a very small number of examples is used, eg. 10, the subject models can overfit during training and completely fail to generalise to the validation set. In this scenario we can say practically nothing about the behaviour of the model in general, as no representations are formed and therefore no abstractions of the internal computation can be formed to reason about interpretability problems.
