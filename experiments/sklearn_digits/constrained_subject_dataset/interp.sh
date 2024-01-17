@@ -23,4 +23,4 @@ case $EXAMPLE_COUNT_GROUP in
     *) echo "Invalid group" $EXAMPLE_COUNT; exit 1;;
 esac
 
-NUM_DIGITS=$NUM_DIGITS stdbuf -oL /home3/wclv88/bounding-mi/bin/python /home3/wclv88/bounding-mi-repo/experiments/sklearn_digits/benchmark.py --seed 0 --device cuda --subject_model_path sklearn_digits/constrained_data/subject-models --interpretability_model_path=sklearn_digits/interpretability_models --interpretability_model_batch_size 8 --subject_model_num_classes 4 --subject_model_example_count $EXAMPLE_COUNT
+NUM_DIGITS=$NUM_DIGITS stdbuf -oL /home3/wclv88/bounding-mi/bin/python /home3/wclv88/bounding-mi-repo/experiments/sklearn_digits/benchmark.py --seed 0 --device cuda --subject_model_path sklearn_digits/constrained_data/subject-models --interpretability_model_path=sklearn_digits/interpretability_models --interpretability_model_batch_size 8 --subject_model_num_classes 4 --subject_model_example_count $EXAMPLE_COUNT --interpretability_model_embedded
