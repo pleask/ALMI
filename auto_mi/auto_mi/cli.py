@@ -8,7 +8,7 @@ import random
 import wandb
 
 from auto_mi.trainers import AdamTrainer
-from auto_mi.mi import Transformer, train_mi_model, evaluate_interpretability_model
+from auto_mi.mi import Transformer, EmbeddingTransformer, train_mi_model, evaluate_interpretability_model
 from auto_mi.subject_models import evaluate_subject_model, train_subject_models
 
 
@@ -160,6 +160,12 @@ def train_cli(
         help="Number of epochs to train the interpretability models.",
         default=default_subject_model_epochs,
     )
+    interpretability_model_group.add_argument(
+        "--interpretability_model_embedded",
+        action="store_true",
+        help="Whether to use an embedded interpretability model.",
+    )
+    
     args = parser.parse_args()
 
     subject_model_io = subject_model_io_class(args.subject_model_path)
@@ -183,13 +189,22 @@ def train_cli(
         device=args.device,
     )
 
-    interpretability_model = Transformer(
-        subject_model_parameter_count,
-        task.mi_output_shape,
-        num_layers=args.interpretability_model_num_layers,
-        num_heads=args.interpretability_model_num_heads,
-        positional_encoding_size=args.interpretability_model_positional_encoding_size,
-    ).to(args.device)
+    if args.interpretability_model_embedded:
+        interpretability_model = EmbeddingTransformer(
+            subject_model_parameter_count,
+            task.mi_output_shape,
+            num_layers=args.interpretability_model_num_layers,
+            num_heads=args.interpretability_model_num_heads,
+            positional_encoding_size=args.interpretability_model_positional_encoding_size,
+        ).to(args.device)
+    else:
+        interpretability_model = Transformer(
+            subject_model_parameter_count,
+            task.mi_output_shape,
+            num_layers=args.interpretability_model_num_layers,
+            num_heads=args.interpretability_model_num_heads,
+            positional_encoding_size=args.interpretability_model_positional_encoding_size,
+        ).to(args.device)
     if args.interpretability_model_resume:
         interpretability_model = interpretability_model_io.get_model(
             interpretability_model, args.interpretability_model_resume

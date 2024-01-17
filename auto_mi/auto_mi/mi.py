@@ -2,6 +2,7 @@
 Methods for training and evaluating interpretability models.
 """
 import os
+import math
 import random
 
 import torch
@@ -383,7 +384,6 @@ class PositionalEncoding(nn.Module):
         pe = self.pe[:, : x.size(1), :].expand(x.shape[0], -1, -1)
         pe = pe.expand(x.shape[0], -1, -1)
         return x + pe
-        # return torch.cat([x, pe], dim =-1)
 
 
 class Transformer(nn.Module, MetadataBase):
@@ -425,6 +425,75 @@ class Transformer(nn.Module, MetadataBase):
         x = self.positional_encoding(x)
         x = self.transformer_encoder(x)
 
+        x = x.transpose(1, 2)
+        x = self.global_avg_pooling(x).squeeze(2)
+        output = self.fc(x)
+        output = output.view(-1, *self.out_shape)
+        return output
+
+
+class EmbeddingTransformer(nn.Module, MetadataBase):
+    """
+    Chunks the input and embeds each chunk separately before passing it through
+    the transformer.
+    """
+    def __init__(
+        self,
+        subject_model_parameter_count,
+        out_shape,
+        num_layers=6,
+        num_heads=1,
+        positional_encoding_size=4096,
+        chunk_size = 64,
+    ):
+        super().__init__()
+        self.out_shape = out_shape
+
+        output_size = torch.zeros(out_shape).view(-1).shape[0]
+
+        self.positional_encoding = PositionalEncoding(
+            positional_encoding_size, subject_model_parameter_count
+        )
+
+        self.embedding = nn.Linear(chunk_size, positional_encoding_size)
+        self._chunk_size = chunk_size
+
+        encoder_layer = nn.TransformerEncoderLayer(
+            d_model=self.positional_encoding.length,
+            nhead=num_heads,
+            dim_feedforward=2048,
+            batch_first=True,
+        )
+        self.transformer_encoder = nn.TransformerEncoder(
+            encoder_layer,
+            num_layers=num_layers,
+            norm=nn.LayerNorm(self.positional_encoding.length),
+        )
+
+        # Linear layer for classification
+        self.global_avg_pooling = nn.AdaptiveAvgPool1d(1)
+        self.fc = nn.Linear(self.positional_encoding.length, output_size)
+    
+    def _chunk_input(self, x):
+        _, seq_len = x.size()
+        num_chunks = (seq_len - 1) // self._chunk_size + 1
+        chunks = []
+        for i in range(num_chunks):
+            start = i * self._chunk_size
+            end = min((i + 1) * self._chunk_size, seq_len)
+            chunk = x[:, start:end]
+            if chunk.size(1) < self._chunk_size:
+                padding = torch.zeros((chunk.size(0), self._chunk_size - chunk.size(1))).to(chunk.device)
+                chunk = torch.cat((chunk, padding), dim=1)
+            chunks.append(chunk)
+        stacked_chunks = torch.stack(chunks, dim=1)
+        return stacked_chunks
+
+    def forward(self, x):
+        x = self._chunk_input(x)
+        x = self.embedding(x) * math.sqrt(self.positional_encoding.length)
+        x = self.positional_encoding(x)
+        x = self.transformer_encoder(x)
         x = x.transpose(1, 2)
         x = self.global_avg_pooling(x).squeeze(2)
         output = self.fc(x)
