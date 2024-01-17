@@ -259,12 +259,22 @@ def get_matching_subject_models_names(
                 continue
 
         if num_classes > 0:
-            if md["task"]["num_classes"] != num_classes:
-                continue
+            try:
+                if md["task"]["num_classes"] != num_classes:
+                    continue
+            except KeyError:
+                # Older datasets will not have num_classes in their metadata
+                # TODO: Remove this once all models have num_classes in their metadata
+                pass
 
         if subject_model_example_count > 0:
-            if md["task"]["num_examples"] != subject_model_example_count:
-                continue
+            try:
+                if md["task"]["num_examples"] != subject_model_example_count:
+                    continue
+            except KeyError:
+                # Older datasets will not have num_examples in their metadata
+                # TODO: Remove this once all models have num_examples in their metadata
+                pass
 
         matching_subject_models_names.append(md["id"])
         losses.append(md["loss"])

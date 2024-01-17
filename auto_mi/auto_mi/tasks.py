@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from itertools import permutations
+import random
 
 import numpy as np
 from sklearn.model_selection import train_test_split
@@ -120,9 +121,11 @@ class SimpleExample(Example, ABC):
             X, y, test_size=0.2, random_state=42
         )
 
-        # Only use the first num_examples to train
-        X_train = X_train[:num_examples]
-        y_train = y_train[:num_examples]
+        # Use a random sample of the training data if num_examples is specified
+        if num_examples != -1:
+            indices = random.sample(range(len(X_train)), num_examples)
+            X_train = [X_train[i] for i in indices]
+            y_train = [y_train[i] for i in indices]
 
         if type == TRAIN:
             self.X = X_train

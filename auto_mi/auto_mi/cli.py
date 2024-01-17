@@ -82,8 +82,8 @@ def train_cli(
     subject_model_group.add_argument(
         "--subject_model_num_classes",
         type=int,
-        help="Number of classes to use from the training data. If -1, use all classes.",
-        default=-1,
+        help="Number of classes to use from the training data.",
+        required=True,
     )
     subject_model_group.add_argument(
         "--subject_model_example_count",
