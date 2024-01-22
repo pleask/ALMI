@@ -35,26 +35,47 @@ def train_mi_model(
     lr=1e-5,
     subject_model_count=-1,
     frozen_layers=None,
-    num_classes=-1,
-    subject_model_example_count=-1,
+    split_on_variants=False,
 ):
     """
     Trains an interpretability transformer model on the specified subject models.
+
+
+    If split_on_variants is set to true, the interpretability model is trained
+    on the first 70 vairants of the subject models and validated on the last 30
+    variants. Otherwise, the interpretability model is trained on the first 70%
+    of the subject models and validated on the last 30%, regardless of variant.
+    It is assumed that there are 100 variants, and that there are equal numbers
+    of each variant.
     """
-    all_subject_models, _ = get_matching_subject_models_names(
-        subject_model_io,
-        trainer,
-        task=task,
-        frozen_layers=frozen_layers,
-        num_classes=num_classes,
-        subject_model_example_count=subject_model_example_count,
-    )
-    if subject_model_count > 0:
-        all_subject_models = all_subject_models[:subject_model_count]
-    validation_models, train_models = (
-        all_subject_models[: int(VAL_RATIO * len(all_subject_models))],
-        all_subject_models[int(VAL_RATIO * len(all_subject_models)) :],
-    )
+    if not split_on_variants:
+        all_subject_models, _ = get_matching_subject_models_names(
+            subject_model_io,
+            trainer,
+            task=task,
+            frozen_layers=frozen_layers,
+        )
+        if subject_model_count > 0:
+            all_subject_models = all_subject_models[:subject_model_count]
+        validation_models, train_models = (
+            all_subject_models[: int(VAL_RATIO * len(all_subject_models))],
+            all_subject_models[int(VAL_RATIO * len(all_subject_models)) :],
+        )
+    else:
+        train_models, _ = get_matching_subject_models_names(
+            subject_model_io,
+            trainer,
+            task=task,
+            frozen_layers=frozen_layers,
+            variant_range=(0, 70),
+        )
+        validation_models, _ = get_matching_subject_models_names(
+            subject_model_io,
+            trainer,
+            task=task,
+            frozen_layers=frozen_layers,
+            variant_range=(70, 100),
+        )
 
     total_model_count = len(validation_models) + len(train_models)
     if total_model_count == 0:
@@ -251,11 +272,12 @@ class MultifunctionSubjectModelDataset(Dataset):
         metadata = self.metadata[name]
 
         example = self.task.get_dataset(metadata["index"], type=MI)
-        # TODO: Something is broken with the datasets so here's a workaround but fix asap
+        # TODO: Something is broken with the datasets so here's a workaround 
         example._permutation_map = metadata["example"]["permutation_map"]
         y = example.get_target()
 
-        model = self._model_loader.get_model(self.subject_model(self.task), name)
+        # TODO: Can move the variant code to the loader later on
+        model = self._model_loader.get_model(self.subject_model(self.task, variant=metadata["model"]["variant"]), name)
 
         frozen_param_count = 0
         if self.frozen_layers is not None:

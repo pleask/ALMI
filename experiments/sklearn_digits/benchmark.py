@@ -38,21 +38,37 @@ class PermutedDigitsExample(SimpleExample):
 
 
 class DigitsClassifier(nn.Module, MetadataBase):
-    def __init__(self, *_):
+    def __init__(self, *_, variant=0):
         super().__init__()
-        self.conv1 = nn.Conv2d(1, 20, kernel_size=3, padding=1)
-        self.conv2 = nn.Conv2d(20, 20, kernel_size=3, padding=1)
-        self.fc1 = nn.Linear(20 * 2 * 2, 30)
-        self.fc2 = nn.Linear(30, 10)
+
+        self.variant = variant
+        conv_channel_variants = list(range(20, 30))
+        linear_width_variants = list(range(30, 40))
+        variants = [(a, b) for a in conv_channel_variants for b in linear_width_variants]   
+
+        rng = random.Random(42)
+        rng.shuffle(variants)
+
+        self._conv_channels, self._linear_width = variants[self.variant]
+
+        self.conv1 = nn.Conv2d(1, self._conv_channels, kernel_size=3, padding=1)
+        self.conv2 = nn.Conv2d(self._conv_channels, self._conv_channels, kernel_size=3, padding=1)
+        self.fc1 = nn.Linear(self._conv_channels * 2 * 2, self._linear_width)
+        self.fc2 = nn.Linear(self._linear_width, 10)
 
     def forward(self, x):
         x = x.unsqueeze(1)
         x = F.relu(F.max_pool2d(self.conv1(x), 2))
         x = F.relu(F.max_pool2d(self.conv2(x), 2))
-        x = x.view(-1, 20 * 2 * 2)
+        x = x.view(-1, self._conv_channels * 2 * 2)
         x = F.relu(self.fc1(x))
         x = self.fc2(x)
         return F.log_softmax(x, dim=1)
+
+    def get_metadata(self):
+        md = super().get_metadata()
+        md['variant'] = self.variant
+        return md
 
 
 class FreezableDigitsClassifier(DigitsClassifier, FreezableClassifier):
@@ -64,7 +80,7 @@ class FreezableDigitsClassifier(DigitsClassifier, FreezableClassifier):
         DigitsClassifier.__init__(self)
         FreezableClassifier.__init__(self, __file__)
         frozen_combinations = list(combinations(list(range(4)), 2)) + list(combinations(list(range(4)), 1)) + [tuple()]
-        self.frozen = frozen_combinations[int(os.environ.get('FROZEN', 0))]
+        self.frozen = frozen_combinations[int(os.environ.get('FROZEN', -1))]
 
     def get_metadata(self):
         md = super().get_metadata()
@@ -78,8 +94,8 @@ if __name__ == '__main__':
         DirModelWriter,
         DirModelWriter,
         PermutedDigitsTask,
-        # DigitsClassifier,
-        FreezableDigitsClassifier,
+        DigitsClassifier,
+        # FreezableDigitsClassifier,
         default_subject_model_epochs=100,
         default_subject_model_batch_size=1000,
         default_subject_model_lr=0.01,

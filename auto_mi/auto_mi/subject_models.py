@@ -10,14 +10,14 @@ from auto_mi.tasks import VAL
 TRAIN_RATIO = .7
 
 
-def train_subject_models(task, model, trainer, model_writer, count=10, device="cpu"):
+def train_subject_models(task, model, trainer, model_writer, count=10, device="cpu", variant=0):
     """
     Trains subject models using the specified trainer. Returns the average loss
     of the subject models, and a sub-group of the trained subject models that
     are used to validate the performance of the interpretability model on
     subject models created by this trainer.
     """
-    nets = [model(task).to(device) for _ in range(count)]
+    nets = [model(task, variant=variant).to(device) for _ in range(count)]
     targets = [task.get_dataset(i).get_target() for i in range(count)]
     losses, train_losses = trainer.train_parallel(
         nets,
@@ -66,7 +66,6 @@ def evaluate_subject_model(
     assert len(metadata) != 0
 
     accuracies = []
-    # TODO: Use random models
     for model_idx in range(min(model_count, len(metadata))):
         print(f"Model {model_idx}")
         task.seed = metadata[model_idx]["task"]["seed"]
@@ -74,7 +73,7 @@ def evaluate_subject_model(
         model_id = metadata[model_idx]["id"]
         permutation_map = metadata[model_idx]["example"]["permutation_map"]
         print(f"Permutation map: {permutation_map}")
-        model = subject_model_io.get_model(subject_model_class(), model_id)
+        model = subject_model_io.get_model(subject_model_class(variant=metadata[model_idx]['model']['variant']), model_id)
         correct = []
         for _ in range(samples):
             i = random.randint(0, len(example) - 1)
@@ -93,7 +92,7 @@ def get_matching_subject_models_names(
     task,
     exclude=[],
     frozen_layers=None,
-    subject_model_example_count=-1,
+    variant_range=None,
 ):
     """
     Returns a list of subject model names that match the specified trainer and
@@ -154,6 +153,14 @@ def get_matching_subject_models_names(
         except KeyError:
             # Older datasets will not have num_examples in their metadata
             # TODO: Remove this once all models have num_examples in their metadata
+            pass
+
+        try:
+            if md['example']['variant'] not in variant_range:
+                reasons['variant'] += 1
+                continue
+        except KeyError:
+            # Older models will not have variant in their metadata
             pass
 
         matching_subject_models_names.append(md["id"])

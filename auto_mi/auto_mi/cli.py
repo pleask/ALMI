@@ -8,7 +8,12 @@ import random
 import wandb
 
 from auto_mi.trainers import AdamTrainer
-from auto_mi.mi import Transformer, EmbeddingTransformer, train_mi_model, evaluate_interpretability_model
+from auto_mi.mi import (
+    Transformer,
+    EmbeddingTransformer,
+    train_mi_model,
+    evaluate_interpretability_model,
+)
 from auto_mi.subject_models import evaluate_subject_model, train_subject_models
 
 
@@ -91,6 +96,12 @@ def train_cli(
         help="Number of examples to use from the training data for training the subject models. If -1, use all examples.",
         default=-1,
     )
+    subject_model_group.add_argument(
+        "--subject_model_variant",
+        type=int,
+        help="Which variant of the subject model to use. Between 0 and 99 inclusive.",
+        default=0,
+    )
 
     interpretability_model_group = parser.add_argument_group(
         "Interpretability Model Arguments"
@@ -165,7 +176,12 @@ def train_cli(
         action="store_true",
         help="Whether to use an embedded interpretability model.",
     )
-    
+    interpretability_model_group.add_argument(
+        "--interpretability_model_split_on_variants",
+        action="store_true",
+        help="Whether to split on variants, i.e. evaluate the interpretability model on a disjoint set of subject model variants to those used for training.",
+    )
+
     args = parser.parse_args()
 
     subject_model_io = subject_model_io_class(args.subject_model_path)
@@ -233,6 +249,7 @@ def train_cli(
             trainer,
             subject_model_io,
             count=args.subject_model_count,
+            variant=args.subject_model_variant,
         )
     else:
         wandb_kwargs = {}
@@ -269,6 +286,4 @@ def train_cli(
             frozen_layers=args.interpretability_model_frozen_layers,
             lr=args.interpretability_model_lr,
             epochs=args.interpretability_model_epochs,
-            num_classes=args.subject_model_num_classes,
-            subject_model_example_count=args.subject_model_example_count,
         )
