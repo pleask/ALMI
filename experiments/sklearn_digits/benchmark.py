@@ -1,20 +1,15 @@
-from itertools import permutations, combinations
+from itertools import combinations
 import os
 import random
 from auto_mi.io import DirModelWriter
 
-import numpy as np
 from sklearn import datasets
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
-import torch
 import torch.nn.functional as F
 import torch.nn as nn
-from torch.utils.data import Dataset
 
 from auto_mi.base import MetadataBase
 from auto_mi.tasks import SimpleTask, SimpleExample, TRAIN, MI
-from auto_mi.mi import FreezableClassifier
+from auto_mi.subject_models import FreezableClassifier
 from auto_mi.cli import train_cli
 
 
@@ -41,13 +36,18 @@ class DigitsClassifier(nn.Module, MetadataBase):
     def __init__(self, *_, variant=0):
         super().__init__()
 
-        self.variant = variant
         conv_channel_variants = list(range(20, 30))
         linear_width_variants = list(range(30, 40))
         variants = [(a, b) for a in conv_channel_variants for b in linear_width_variants]   
 
-        rng = random.Random(42)
-        rng.shuffle(variants)
+        # If we are using variants, shuffle them so the training variants are
+        # not sequential. Otherwise, use the original variant.
+        if variant >= 0:
+            rng = random.Random(42)
+            rng.shuffle(variants)
+        else:
+            variant = 0
+        self.variant = variant
 
         self._conv_channels, self._linear_width = variants[self.variant]
 

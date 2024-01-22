@@ -1,4 +1,5 @@
 from collections import Counter
+import os
 import random
 from time import gmtime, strftime
 import uuid
@@ -170,3 +171,11 @@ def get_matching_subject_models_names(
 
     random.shuffle(matching_subject_models_names)
     return matching_subject_models_names, sum(losses) / len(losses) if losses else 0
+
+
+class FreezableClassifier:
+    def __init__(self, file):
+        script_dir = os.path.dirname(os.path.abspath(file))
+        base_model_path = os.path.join(script_dir, "base_model.pickle")
+        checkpoint = torch.load(base_model_path)
+        self.load_state_dict(checkpoint)

@@ -1,7 +1,6 @@
 """
 Methods for training and evaluating interpretability models.
 """
-import os
 import math
 from auto_mi.subject_models import get_matching_subject_models_names
 
@@ -277,7 +276,11 @@ class MultifunctionSubjectModelDataset(Dataset):
         y = example.get_target()
 
         # TODO: Can move the variant code to the loader later on
-        model = self._model_loader.get_model(self.subject_model(self.task, variant=metadata["model"]["variant"]), name)
+        try:
+            variant = metadata["model"]["variant"]
+        except KeyError:
+            variant = -1
+        model = self._model_loader.get_model(self.subject_model(self.task, variant=variant), name)
 
         frozen_param_count = 0
         if self.frozen_layers is not None:
@@ -402,11 +405,3 @@ class Transformer(nn.Module, MetadataBase):
         output = self.fc(x)
         output = output.view(-1, *self.out_shape)
         return output
-
-
-class FreezableClassifier:
-    def __init__(self, file):
-        script_dir = os.path.dirname(os.path.abspath(file))
-        base_model_path = os.path.join(script_dir, "base_model.pickle")
-        checkpoint = torch.load(base_model_path)
-        self.load_state_dict(checkpoint)
