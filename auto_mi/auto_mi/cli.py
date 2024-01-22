@@ -10,7 +10,6 @@ import wandb
 from auto_mi.trainers import AdamTrainer
 from auto_mi.mi import (
     Transformer,
-    EmbeddingTransformer,
     train_mi_model,
     evaluate_interpretability_model,
 )
@@ -172,11 +171,6 @@ def train_cli(
         default=default_subject_model_epochs,
     )
     interpretability_model_group.add_argument(
-        "--interpretability_model_embedded",
-        action="store_true",
-        help="Whether to use an embedded interpretability model.",
-    )
-    interpretability_model_group.add_argument(
         "--interpretability_model_split_on_variants",
         action="store_true",
         help="Whether to split on variants, i.e. evaluate the interpretability model on a disjoint set of subject model variants to those used for training.",
@@ -205,22 +199,13 @@ def train_cli(
         device=args.device,
     )
 
-    if args.interpretability_model_embedded:
-        interpretability_model = EmbeddingTransformer(
-            subject_model_parameter_count,
-            task.mi_output_shape,
-            num_layers=args.interpretability_model_num_layers,
-            num_heads=args.interpretability_model_num_heads,
-            positional_encoding_size=args.interpretability_model_positional_encoding_size,
-        ).to(args.device)
-    else:
-        interpretability_model = Transformer(
-            subject_model_parameter_count,
-            task.mi_output_shape,
-            num_layers=args.interpretability_model_num_layers,
-            num_heads=args.interpretability_model_num_heads,
-            positional_encoding_size=args.interpretability_model_positional_encoding_size,
-        ).to(args.device)
+    interpretability_model = Transformer(
+        subject_model_parameter_count,
+        task.mi_output_shape,
+        num_layers=args.interpretability_model_num_layers,
+        num_heads=args.interpretability_model_num_heads,
+        positional_encoding_size=args.interpretability_model_positional_encoding_size,
+    ).to(args.device)
     if args.interpretability_model_resume:
         interpretability_model = interpretability_model_io.get_model(
             interpretability_model, args.interpretability_model_resume

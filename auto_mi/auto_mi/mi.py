@@ -336,52 +336,6 @@ class PositionalEncoding(nn.Module):
 
 
 class Transformer(nn.Module, MetadataBase):
-    def __init__(
-        self,
-        subject_model_parameter_count,
-        out_shape,
-        num_layers=6,
-        num_heads=1,
-        positional_encoding_size=4096,
-    ):
-        super().__init__()
-        self.out_shape = out_shape
-
-        output_size = torch.zeros(out_shape).view(-1).shape[0]
-        self.positional_encoding = PositionalEncoding(
-            positional_encoding_size, subject_model_parameter_count
-        )
-
-        encoder_layer = nn.TransformerEncoderLayer(
-            d_model=self.positional_encoding.length,
-            nhead=num_heads,
-            dim_feedforward=2048,
-            batch_first=True,
-        )
-        self.transformer_encoder = nn.TransformerEncoder(
-            encoder_layer,
-            num_layers=num_layers,
-            norm=nn.LayerNorm(self.positional_encoding.length),
-        )
-
-        # Linear layer for classification
-        self.global_avg_pooling = nn.AdaptiveAvgPool1d(1)
-        self.fc = nn.Linear(self.positional_encoding.length, output_size)
-
-    def forward(self, x):
-        x = x.unsqueeze(-1)
-        x = x.expand(x.shape[0], x.shape[1], self.positional_encoding.length)
-        x = self.positional_encoding(x)
-        x = self.transformer_encoder(x)
-
-        x = x.transpose(1, 2)
-        x = self.global_avg_pooling(x).squeeze(2)
-        output = self.fc(x)
-        output = output.view(-1, *self.out_shape)
-        return output
-
-
-class EmbeddingTransformer(nn.Module, MetadataBase):
     """
     Chunks the input and embeds each chunk separately before passing it through
     the transformer.
