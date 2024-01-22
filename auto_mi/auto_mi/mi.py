@@ -378,7 +378,19 @@ class Transformer(nn.Module, MetadataBase):
 
         # Linear layer for classification
         self.global_avg_pooling = nn.AdaptiveAvgPool1d(1)
+
         self.fc = nn.Linear(self.positional_encoding.length, output_size)
+
+        self.apply(self._init_weights)
+    
+    def _init_weights(self, module):
+        if isinstance(module, nn.Linear):
+            nn.init.kaiming_normal_(module.weight, nonlinearity='relu')
+        elif isinstance(module, nn.TransformerEncoderLayer):
+            nn.init.kaiming_normal_(module.self_attn.in_proj_weight, nonlinearity='relu')
+            nn.init.kaiming_normal_(module.linear1.weight, nonlinearity='relu')
+            nn.init.kaiming_normal_(module.linear2.weight, nonlinearity='relu')
+            # Add more if there are other weights in TransformerEncoderLayer
     
     def _chunk_input(self, x):
         _, seq_len = x.size()
