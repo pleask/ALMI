@@ -286,4 +286,5 @@ def train_cli(
             frozen_layers=args.interpretability_model_frozen_layers,
             lr=args.interpretability_model_lr,
             epochs=args.interpretability_model_epochs,
+            split_on_variants=args.interpretability_model_split_on_variants,
         )
