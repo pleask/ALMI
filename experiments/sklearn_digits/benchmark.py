@@ -83,7 +83,7 @@ if __name__ == '__main__':
         default_subject_model_epochs=100,
         default_subject_model_batch_size=1000,
         default_subject_model_lr=0.01,
-        default_interpretability_model_num_layers=1,
-        default_interpretability_model_num_heads=2,
+        default_interpretability_model_num_layers=8,
+        default_interpretability_model_num_heads=8,
         default_interpretability_model_positional_encoding_size=2048,
     )
