@@ -211,7 +211,7 @@ def train_cli(
         )
 
     if args.evaluate_subject_models:
-        evaluate_subject_model(task_class, subject_model_class, subject_model_io)
+        evaluate_subject_model(task, subject_model_class, subject_model_io, trainer)
         quit()
     if args.evaluate_interpretability_model:
         evaluate_interpretability_model(

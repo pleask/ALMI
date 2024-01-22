@@ -3,7 +3,7 @@ Methods for training and evaluating interpretability models.
 """
 import os
 import math
-import random
+from auto_mi.subject_models import get_matching_subject_models_names
 
 import torch
 import torch.nn as nn
@@ -210,77 +210,6 @@ def evaluate_interpretability_model(
     validate_on_non_frozen: If set to true, validates only on non-frozen models.
     """
     raise NotImplementedError("Method removed in favour of wandb logging.")
-
-
-def get_matching_subject_models_names(
-    model_writer,
-    trainer,
-    task,
-    exclude=[],
-    frozen_layers=None,
-    num_classes=-1,
-    subject_model_example_count=-1,
-):
-    """
-    Returns a list of subject model names that match the specified trainer and
-    task by searching the index.txt file.
-
-    frozen_layers: If set to a tuple, returns only models that
-    have the layers specified in the tuple frozen.
-    """
-    matching_subject_models_names = []
-    losses = []
-    metadata = model_writer.get_metadata()
-    for md in metadata:
-        if md["task"]["name"] != type(task).__name__:
-            continue
-
-        trainer_metadata = trainer.get_metadata()
-        if not all(
-            md["trainer"][key] == trainer_metadata[key]
-            for key in ["name", "weight_decay", "lr", "l1_penalty_weight"]
-        ):
-            continue
-
-        if md["id"] in exclude:
-            print("exclude")
-            continue
-
-        # Have had a few issues where model pickles aren't saved but their
-        # metadata is still written, so skip those models.
-        if not model_writer.check_model_exists(md["id"]):
-            print("does not exist")
-            continue
-
-        if frozen_layers is not None:
-            try:
-                if set(md["model"]["frozen"]) != set(frozen_layers):
-                    continue
-            except KeyError:
-                continue
-
-        try:
-            if md["task"]["num_classes"] != num_classes:
-                continue
-        except KeyError:
-            # Older datasets will not have num_classes in their metadata
-            # TODO: Remove this once all models have num_classes in their metadata
-            pass
-
-        try:
-            if md["task"]["num_examples"] != subject_model_example_count:
-                continue
-        except KeyError:
-            # Older datasets will not have num_examples in their metadata
-            # TODO: Remove this once all models have num_examples in their metadata
-            pass
-
-        matching_subject_models_names.append(md["id"])
-        losses.append(md["loss"])
-
-    random.shuffle(matching_subject_models_names)
-
-    return matching_subject_models_names, sum(losses) / len(losses) if losses else 0
 
 
 class MultifunctionSubjectModelDataset(Dataset):
