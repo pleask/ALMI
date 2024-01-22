@@ -4,7 +4,7 @@
 #SBATCH -p res-gpu-small
 #SBATCH --qos=short
 #SBATCH --time=1-00:00:00
-#SBATCH --output=sklearn_digits/outs/slurm-%j.out
+#SBATCH --output=sklearn_digits/variant_data/outs/slurm-%j.out
 #SBATCH --array=0-99
 #SBATCH --gres=gpu
 
