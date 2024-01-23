@@ -33,7 +33,6 @@ def train_mi_model(
     device="cuda",
     lr=1e-5,
     subject_model_count=-1,
-    frozen_layers=None,
     split_on_variants=False,
 ):
     """
@@ -52,7 +51,6 @@ def train_mi_model(
             subject_model_io,
             trainer,
             task=task,
-            frozen_layers=frozen_layers,
         )
         if subject_model_count > 0:
             all_subject_models = all_subject_models[:subject_model_count]
@@ -65,14 +63,12 @@ def train_mi_model(
             subject_model_io,
             trainer,
             task=task,
-            frozen_layers=frozen_layers,
             variant_range=(0, 70),
         )
         validation_models, _ = get_matching_subject_models_names(
             subject_model_io,
             trainer,
             task=task,
-            frozen_layers=frozen_layers,
             variant_range=(70, 100),
         )
 
@@ -88,40 +84,22 @@ def train_mi_model(
         task,
         subject_model,
         normalise=True,
-        frozen_layers=frozen_layers,
     )
     train_dataloader = DataLoader(
         train_dataset, batch_size=batch_size, shuffle=True, pin_memory=True
     )
-
-    # Split the validation models into groups with the same frozen layers for better logging to wandb.
-    frozen_layers_to_ids = {}
-    # the dataset metadata has all the models in the directory, regardless of
-    # whether they are used in the training dataset
-    for id in validation_models:
-        try:
-            frozen_layers = tuple(train_dataset.metadata[id]["model"]["frozen"])
-            if frozen_layers in frozen_layers_to_ids:
-                frozen_layers_to_ids[frozen_layers].append(id)
-            else:
-                frozen_layers_to_ids[frozen_layers] = [id]
-        except KeyError:
-            pass
-    validation_dataloaders = {}
-    for frozen_layers, ids in frozen_layers_to_ids.items():
-        validation_dataloaders[frozen_layers] = DataLoader(
-            MultifunctionSubjectModelDataset(
-                subject_model_io,
-                ids,
-                task,
-                subject_model,
-                normalise=True,
-                frozen_layers=frozen_layers,
-            ),
-            batch_size=batch_size,
-            shuffle=True,
-            pin_memory=True,
-        )
+    validation_dataloader = DataLoader(
+        MultifunctionSubjectModelDataset(
+            subject_model_io,
+            validation_models,
+            task,
+            subject_model,
+            normalise=True,
+        ),
+        batch_size=batch_size,
+        shuffle=True,
+        pin_memory=True,
+    )
 
     # Log a histogram of the subject model losses
     subject_model_losses = [
@@ -164,52 +142,40 @@ def train_mi_model(
 
         scheduler.step(loss)
         eval_loss, accuracy = _evaluate(
-            interpretability_model, validation_dataloaders, device=device
+            interpretability_model, validation_dataloader, device=device
         )
         wandb.log(
             {
-                **{
-                    f"validation_loss_{frozen_layers}": loss
-                    for frozen_layers, loss in eval_loss.items()
-                },
-                **{
-                    f"validation_accuracy_{frozen_layers}": acc
-                    for frozen_layers, acc in accuracy.items()
-                },
+                'validation_loss': eval_loss,
+                'validation_accuracy': accuracy,
             }
         )
 
         interpretability_model_io.write_model(run.id, interpretability_model)
 
 
-def _evaluate(interpretability_model, validation_dataloaders, device="cuda"):
-    accuracies = {}
-    eval_losses = {}
+def _evaluate(interpretability_model, validation_dataloader, device="cuda"):
+    eval_loss = 0.0
+    accuracy = 0.0
 
     interpretability_model.eval()
     with torch.no_grad():
-        for frozen_layers, validation_dataloader in validation_dataloaders.items():
-            eval_loss = 0.0
-            accuracy = 0.0
-            for inputs, targets in validation_dataloader:
-                outputs = interpretability_model(inputs.to(device))
-                loss = CRITERION(outputs, targets.to(device))
-                eval_loss += loss.item()
-                predicted_classes = torch.argmax(outputs, dim=-1)
-                target_classes = torch.argmax(targets, dim=-1)
-                accuracy += torch.sum(
-                    torch.all(
-                        predicted_classes.detach().cpu() == target_classes.cpu(), dim=1
-                    )
-                ).item() / len(predicted_classes)
+        for inputs, targets in validation_dataloader:
+            outputs = interpretability_model(inputs.to(device))
+            loss = CRITERION(outputs, targets.to(device))
+            eval_loss += loss.item()
+            predicted_classes = torch.argmax(outputs, dim=-1)
+            target_classes = torch.argmax(targets, dim=-1)
+            accuracy += torch.sum(
+                torch.all(
+                    predicted_classes.detach().cpu() == target_classes.cpu(), dim=1
+                )
+            ).item() / len(predicted_classes)
 
-            eval_loss /= len(validation_dataloader)
-            eval_losses[frozen_layers] = eval_loss
+        eval_loss /= len(validation_dataloader)
+        accuracy /= len(validation_dataloader)
 
-            accuracy /= len(validation_dataloader)
-            accuracies[frozen_layers] = accuracy
-
-    return eval_losses, accuracies
+    return eval_loss, accuracy
 
 
 def evaluate_interpretability_model(
@@ -226,8 +192,6 @@ def evaluate_interpretability_model(
 ):
     """
     Evaluates an interpretability model on the specified subject models.
-
-    validate_on_non_frozen: If set to true, validates only on non-frozen models.
     """
     raise NotImplementedError("Method removed in favour of wandb logging.")
 
@@ -241,14 +205,12 @@ class MultifunctionSubjectModelDataset(Dataset):
         subject_model,
         normalise=False,
         device="cpu",
-        frozen_layers=None,
     ):
         self._model_loader = model_loader
         self.subject_model_ids = subject_model_ids
         self.device = device
         self.task = task
         self.subject_model = subject_model
-        self.frozen_layers = frozen_layers
 
         self.metadata = self._index_metadata()
         self._data = [None for _ in self.subject_model_ids]
@@ -282,18 +244,9 @@ class MultifunctionSubjectModelDataset(Dataset):
             variant = -1
         model = self._model_loader.get_model(self.subject_model(self.task, variant=variant), name)
 
-        frozen_param_count = 0
-        if self.frozen_layers is not None:
-            # count the number of parameters in the frozen layers
-            for i, param in enumerate(model.parameters()):
-                if i // 2 in self.frozen_layers:
-                    frozen_param_count += param.numel()
-
         x = torch.concat(
             [param.detach().reshape(-1) for _, param in model.named_parameters()]
         )
-
-        x = x[frozen_param_count:]
 
         if self._normalise:
             x = (x - self._mean) / self._std

@@ -146,13 +146,6 @@ def train_cli(
         help="Evaluate an interpretability model.",
     )
     interpretability_model_group.add_argument(
-        "--interpretability_model_frozen_layers",
-        nargs="+",
-        type=int,
-        default=None,
-        help="Only use subject models that match these frozen layers.",
-    )
-    interpretability_model_group.add_argument(
         "--interpretability_model_lr",
         type=float,
         default=1e-5,
@@ -268,7 +261,6 @@ def train_cli(
             device=args.device,
             batch_size=args.interpretability_model_batch_size,
             subject_model_count=args.interpretability_model_subject_model_count,
-            frozen_layers=args.interpretability_model_frozen_layers,
             lr=args.interpretability_model_lr,
             epochs=args.interpretability_model_epochs,
             split_on_variants=args.interpretability_model_split_on_variants,

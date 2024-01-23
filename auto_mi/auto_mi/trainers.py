@@ -66,10 +66,6 @@ class AdamTrainer(BaseTrainer):
         self.l1_penalty_weight = l1_penalty_weight
 
     def train_parallel(self, nets, examples, validation_examples):
-        for net in nets:
-            frozen_param_count = self.freeze_network_layers(net)
-        print(f'{frozen_param_count} parameters frozen')
-
         optimizers = [optim.Adam(net.parameters(), lr=self.lr, weight_decay=self.weight_decay) for net in nets]
         training_dataloaders = [DataLoader(example, batch_size=self.batch_size, shuffle=True) for example in examples]
 
@@ -83,20 +79,3 @@ class AdamTrainer(BaseTrainer):
             'lr': self.lr,
             'l1_penalty_weight': self.l1_penalty_weight,
         }
-
-    # TODO: When there is more than one frozen layer, should we always freeze all the layers or just some of them?
-    @staticmethod
-    def freeze_network_layers(net):
-        """
-        If the net is freezable, i.e. if it is pretrained, freeze the specified layers.
-        """
-        try:
-            frozen = net.frozen
-            frozen_param_count = 0
-            for i, p in enumerate(net.parameters()):
-                if (i // 2) in frozen:
-                    p.requires_grad = False
-                    frozen_param_count += p.numel()
-            return frozen_param_count
-        except AttributeError:
-            return 0

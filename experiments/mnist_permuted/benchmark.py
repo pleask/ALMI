@@ -117,5 +117,4 @@ if __name__ == '__main__':
         default_interpretability_model_num_layers=1,
         default_interpretability_model_num_heads=2,
         default_interpretability_model_positional_encoding_size=2048,
-        validate_on_non_frozen=True
     )

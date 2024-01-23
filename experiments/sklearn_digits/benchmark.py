@@ -9,7 +9,6 @@ import torch.nn as nn
 
 from auto_mi.base import MetadataBase
 from auto_mi.tasks import SimpleTask, SimpleExample, TRAIN, MI
-from auto_mi.subject_models import FreezableClassifier
 from auto_mi.cli import train_cli
 
 
@@ -71,23 +70,6 @@ class DigitsClassifier(nn.Module, MetadataBase):
         return md
 
 
-class FreezableDigitsClassifier(DigitsClassifier, FreezableClassifier):
-    def __init__(self, *_):
-        """
-        Any two layers, or a single layer, can be frozen without significantly
-        effecting the performance. 
-        """
-        DigitsClassifier.__init__(self)
-        FreezableClassifier.__init__(self, __file__)
-        frozen_combinations = list(combinations(list(range(4)), 2)) + list(combinations(list(range(4)), 1)) + [tuple()]
-        self.frozen = frozen_combinations[int(os.environ.get('FROZEN', -1))]
-
-    def get_metadata(self):
-        md = super().get_metadata()
-        md['frozen'] = self.frozen
-        return md
-
-
 if __name__ == '__main__':
     train_cli(
         ['sklearn_digits'],
@@ -95,7 +77,6 @@ if __name__ == '__main__':
         DirModelWriter,
         PermutedDigitsTask,
         DigitsClassifier,
-        # FreezableDigitsClassifier,
         default_subject_model_epochs=100,
         default_subject_model_batch_size=1000,
         default_subject_model_lr=0.01,

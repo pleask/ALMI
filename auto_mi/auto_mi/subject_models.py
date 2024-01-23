@@ -92,15 +92,11 @@ def get_matching_subject_models_names(
     trainer,
     task,
     exclude=[],
-    frozen_layers=None,
     variant_range=None,
 ):
     """
     Returns a list of subject model names that match the specified trainer and
     task by searching the index.txt file.
-
-    frozen_layers: If set to a tuple, returns only models that
-    have the layers specified in the tuple frozen.
     """
     matching_subject_models_names = []
     losses = []
@@ -129,14 +125,6 @@ def get_matching_subject_models_names(
         if not model_writer.check_model_exists(md["id"]):
             reasons['model_exists'] += 1   
             continue
-
-        if frozen_layers is not None:
-            try:
-                if set(md["model"]["frozen"]) != set(frozen_layers):
-                    reasons['frozen_layers'] += 1
-                    continue
-            except KeyError:
-                continue
 
         try:
             if md["task"]["num_classes"] != task.num_classes:
@@ -171,11 +159,3 @@ def get_matching_subject_models_names(
 
     random.shuffle(matching_subject_models_names)
     return matching_subject_models_names, sum(losses) / len(losses) if losses else 0
-
-
-class FreezableClassifier:
-    def __init__(self, file):
-        script_dir = os.path.dirname(os.path.abspath(file))
-        base_model_path = os.path.join(script_dir, "base_model.pickle")
-        checkpoint = torch.load(base_model_path)
-        self.load_state_dict(checkpoint)
