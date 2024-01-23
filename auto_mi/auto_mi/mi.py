@@ -213,22 +213,28 @@ class MultifunctionSubjectModelDataset(Dataset):
         self.subject_model = subject_model
 
         self.metadata = self._index_metadata()
-        self._data = [None for _ in self.subject_model_ids]
 
-        # Initially set normalise to false so we don't attempt to retrieve normalised data for normalisation
-        self._normalise = False
+        # Flatten the samples and calculate the maximum number of elements
+        samples = [torch.flatten(self[i][0]) for i in range(len(subject_model_ids))]
+        self.max_elements = max(len(sample) for sample in samples)
+
         if normalise:
-            samples = [self[i][0] for i in range(len(subject_model_ids) // 1)]
-            params = torch.stack(samples).view(-1)
+            params = torch.cat(samples)
             self._std, self._mean = torch.std_mean(params, dim=-1)
             self._normalise = True
+
+        self._data = [None for _ in self.subject_model_ids]
 
     def __len__(self):
         return len(self.subject_model_ids)
 
     def __getitem__(self, idx):
-        if self._data[idx]:
-            return self._data[idx]
+        try:
+            if self._data[idx]:
+                return self._data[idx]
+        except AttributeError:
+            # The time we run this we don't know what the max length in the data is.
+            pass
         name = self.subject_model_ids[idx]
         metadata = self.metadata[name]
 
@@ -248,10 +254,21 @@ class MultifunctionSubjectModelDataset(Dataset):
             [param.detach().reshape(-1) for _, param in model.named_parameters()]
         )
 
-        if self._normalise:
-            x = (x - self._mean) / self._std
+        try:
+            if self._normalise:
+                x = (x - self._mean) / self._std
 
-        self._data[idx] = (x, y)
+            if len(x) < self.max_elements:
+                x = torch.nn.functional.pad(x, (0, self.max_elements - len(x)))
+        except AttributeError:
+            # If we haven't parameterised the normalisation yet, just skip.
+            pass
+
+        try:
+            self._data[idx] = (x, y)
+        except AttributeError:
+            # The time we run this we don't know what the max length in the data is.
+            pass
 
         return x, y
 

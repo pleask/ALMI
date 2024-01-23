@@ -180,7 +180,7 @@ def train_cli(
         num_classes=args.subject_model_num_classes,
         num_examples=args.subject_model_example_count,
     )
-    sample_model = subject_model_class(task)
+    sample_model = subject_model_class(task, variant=args.subject_model_variant)
     subject_model_parameter_count = sum(p.numel() for p in sample_model.parameters())
     print(f"Subject model parameter count: {subject_model_parameter_count}", flush=True)
 
