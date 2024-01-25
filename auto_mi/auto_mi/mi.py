@@ -360,7 +360,6 @@ class Transformer(nn.Module, MetadataBase):
             nn.init.kaiming_normal_(module.self_attn.in_proj_weight, nonlinearity='relu')
             nn.init.kaiming_normal_(module.linear1.weight, nonlinearity='relu')
             nn.init.kaiming_normal_(module.linear2.weight, nonlinearity='relu')
-            # Add more if there are other weights in TransformerEncoderLayer
     
     def _chunk_input(self, x):
         _, seq_len = x.size()

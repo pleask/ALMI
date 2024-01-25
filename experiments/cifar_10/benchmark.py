@@ -1,15 +1,14 @@
 from itertools import combinations
 import os
 import random
+import torch
 import torch.nn.functional as F
 import torch.nn as nn
-
-from keras.datasets import cifar10
+from torchvision import datasets, transforms
 
 from auto_mi.io import DirModelWriter
 from auto_mi.base import MetadataBase
 from auto_mi.tasks import SimpleTask, SimpleExample, TRAIN, MI
-from auto_mi.subject_models import FreezableClassifier
 from auto_mi.cli import train_cli
 
 
@@ -31,15 +30,15 @@ class PermutedCIFARTask(SimpleTask):
 
 class CIFAR10Example(SimpleExample):
     def _get_dataset(self):
-        (x_train, y_train), (x_test, y_test) = cifar10.load_data()
-        X = x_train 
-        y = y_train.reshape(-1) # flatten
+        cifar10_train = datasets.CIFAR10(root='./data', train=True, download=True)
+        X = torch.tensor(cifar10_train.data)
+        y = torch.tensor(cifar10_train.targets)
         return X, y
 
     def __getitem__(self, i):
         X, y = super().__getitem__(i)
-        return X.reshape(3, 32, 32), y
-
+        return X.permute(2, 0, 1), y
+        
 
 class CIFAR10Classifier(nn.Module, MetadataBase):
     def __init__(self, *_, variant=0):
