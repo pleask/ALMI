@@ -129,6 +129,7 @@ def train_mi_model(
 
     for epoch in tqdm(range(epochs), desc="Interpretability model epochs"):
         interpretability_model.train()
+        total_loss = 0.
         for i, (inputs, targets) in enumerate(train_dataloader):
             optimizer.zero_grad()
             outputs = interpretability_model(inputs.to(device, non_blocking=True))
@@ -139,6 +140,8 @@ def train_mi_model(
             torch.nn.utils.clip_grad_norm_(interpretability_model.parameters(), 0.5)
             optimizer.step()
             wandb.log({"train_loss": loss})
+            total_loss += loss
+        avg_train_loss = total_loss / len(train_dataloader)
 
         scheduler.step(loss)
         eval_loss, accuracy = _evaluate(
@@ -150,6 +153,7 @@ def train_mi_model(
                 'validation_accuracy': accuracy,
             }
         )
+        tqdm.write(f'Epoch: {epoch}, Train Loss: {avg_train_loss}, Validation Loss: {eval_loss}, Validation Accuracy: {accuracy}')
 
         interpretability_model_io.write_model(run.id, interpretability_model)
 
@@ -318,9 +322,9 @@ class Transformer(nn.Module, MetadataBase):
         subject_model_parameter_count,
         out_shape,
         num_layers=6,
-        num_heads=1,
+        num_heads=8,
         positional_encoding_size=4096,
-        chunk_size = 64,
+        chunk_size = 128,
     ):
         super().__init__()
         self.out_shape = out_shape
