@@ -1,7 +1,7 @@
 from itertools import combinations
 import os
 import random
-from auto_mi.io import DirModelWriter
+from auto_mi.io import DirModelWriter, TarModelWriter
 
 from sklearn import datasets
 import torch.nn.functional as F
@@ -73,7 +73,7 @@ class DigitsClassifier(nn.Module, MetadataBase):
 if __name__ == '__main__':
     train_cli(
         ['sklearn_digits'],
-        DirModelWriter,
+        TarModelWriter,
         DirModelWriter,
         PermutedDigitsTask,
         DigitsClassifier,
