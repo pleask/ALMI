@@ -3,6 +3,7 @@ import filelock
 import json
 import os
 import pickle
+import tarfile
 
 import torch
 
