@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH -N 1
 #SBATCH -c 1
-#SBATCH --mem=1G
+#SBATCH --mem=2G
 #SBATCH -p shared
 #SBATCH --time=2-00:00:00
 #SBATCH -o /nobackup/wclv88/cifar_10/outs/slurm-%A_%a.out
