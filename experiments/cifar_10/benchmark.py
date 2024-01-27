@@ -37,7 +37,8 @@ class CIFAR10Example(SimpleExample):
 
     def __getitem__(self, i):
         X, y = super().__getitem__(i)
-        return X.permute(2, 0, 1), y
+        X = X.permute(2, 0, 1).float() / 255
+        return X, y
         
 
 class CIFAR10Classifier(nn.Module, MetadataBase):

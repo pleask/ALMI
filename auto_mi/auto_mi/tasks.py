@@ -139,7 +139,10 @@ class SimpleExample(Example, ABC):
         pass
 
     def __getitem__(self, i):
-        X = self.X[i].astype(np.float32)
+        try:
+            X = self.X[i].astype(np.float32)
+        except AttributeError:
+            X = self.X[i]
         y = self.y[i]
 
         return X, self._permutation_map[y]
