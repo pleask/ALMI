@@ -16,5 +16,6 @@ stdbuf -oL python3 \
     --seed $SEED \
     --device cpu \
     --subject_model_path /nobackup/wclv88/cifar_10/subject-models \
+    --train_subject_models \
     --subject_model_count 5 \
     --subject_model_num_classes 10
