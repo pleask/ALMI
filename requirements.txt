@@ -9,3 +9,5 @@ scipy
 torchvision
 scikit-learn
 tqdm
+tarfile
+filelock

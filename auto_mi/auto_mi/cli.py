@@ -2,9 +2,6 @@
 CLI tools for running automated interpretability experiments.
 """
 import argparse
-import os
-import random
-
 import wandb
 
 from auto_mi.trainers import AdamTrainer
