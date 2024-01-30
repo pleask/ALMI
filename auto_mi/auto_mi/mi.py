@@ -301,6 +301,7 @@ class MultifunctionSubjectModelDataset(Dataset):
         return self[0][1].shape
 
 
+# TODO: Use dropout
 class PositionalEncoding(nn.Module):
     def __init__(self, encoding_length=4, max_len=512):
         super(PositionalEncoding, self).__init__()
