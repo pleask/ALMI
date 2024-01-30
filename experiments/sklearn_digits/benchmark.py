@@ -32,20 +32,18 @@ class PermutedDigitsExample(SimpleExample):
 
 
 class DigitsClassifier(nn.Module, MetadataBase):
-    def __init__(self, *_, variant=0):
+    def __init__(self, *_, variant=0): 
+        """
+        Variant 70 is the smallest subject model.
+        """
         super().__init__()
 
         conv_channel_variants = list(range(20, 30))
         linear_width_variants = list(range(30, 40))
         variants = [(a, b) for a in conv_channel_variants for b in linear_width_variants]   
 
-        # If we are using variants, shuffle them so the training variants are
-        # not sequential. Otherwise, use the original variant.
-        if variant >= 0:
-            rng = random.Random(42)
-            rng.shuffle(variants)
-        else:
-            variant = 0
+        rng = random.Random(42)
+        rng.shuffle(variants)
         self.variant = variant
 
         self._conv_channels, self._linear_width = variants[self.variant]
