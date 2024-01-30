@@ -8,10 +8,12 @@ import torch
 
 from auto_mi.tasks import VAL
 
-TRAIN_RATIO = .7
+TRAIN_RATIO = 0.7
 
 
-def train_subject_models(task, model, trainer, model_writer, count=10, device="cpu", variant=0):
+def train_subject_models(
+    task, model, trainer, model_writer, count=10, device="cpu", variant=0
+):
     """
     Trains subject models using the specified trainer. Returns the average loss
     of the subject models, and a sub-group of the trained subject models that
@@ -26,7 +28,7 @@ def train_subject_models(task, model, trainer, model_writer, count=10, device="c
         [task.get_dataset(i, type=VAL) for i in range(count)],
     )
 
-    print('Writing models to disk...')
+    print("Writing models to disk...")
     model_ids = []
     for i, (net, target, loss, train_loss) in enumerate(
         zip(nets, targets, losses, train_losses)
@@ -60,7 +62,9 @@ def evaluate_subject_model(
     task, subject_model_class, subject_model_io, trainer, samples=100, model_count=100
 ):
     metadata = subject_model_io.get_metadata()
-    subject_model_names, _ = get_matching_subject_models_names(subject_model_io, trainer, task)
+    subject_model_names, _ = get_matching_subject_models_names(
+        subject_model_io, trainer, task
+    )
     if len(subject_model_names) > model_count:
         subject_model_names = random.sample(subject_model_names, model_count)
     metadata = [md for md in metadata if md["id"] in subject_model_names]
@@ -74,7 +78,10 @@ def evaluate_subject_model(
         model_id = metadata[model_idx]["id"]
         permutation_map = metadata[model_idx]["example"]["permutation_map"]
         print(f"Permutation map: {permutation_map}")
-        model = subject_model_io.get_model(subject_model_class(variant=metadata[model_idx]['model']['variant']), model_id)
+        model = subject_model_io.get_model(
+            subject_model_class(variant=metadata[model_idx]["model"]["variant"]),
+            model_id,
+        )
         correct = []
         for _ in range(samples):
             i = random.randint(0, len(example) - 1)
@@ -92,7 +99,7 @@ def get_matching_subject_models_names(
     trainer,
     task,
     exclude=[],
-    variant_range=None,
+    variants=None,
 ):
     """
     Returns a list of subject model names that match the specified trainer and
@@ -105,7 +112,7 @@ def get_matching_subject_models_names(
     reasons = Counter()
     for md in metadata:
         if md["task"]["name"] != type(task).__name__:
-            reasons['task.name'] += 1
+            reasons["task.name"] += 1
             continue
 
         trainer_metadata = trainer.get_metadata()
@@ -113,22 +120,22 @@ def get_matching_subject_models_names(
             md["trainer"][key] == trainer_metadata[key]
             for key in ["name", "weight_decay", "lr", "l1_penalty_weight"]
         ):
-            reasons['trainer'] += 1
+            reasons["trainer"] += 1
             continue
 
         if md["id"] in exclude:
-            reasons['exclude'] += 1 
+            reasons["exclude"] += 1
             continue
 
         # Have had a few issues where model pickles aren't saved but their
         # metadata is still written, so skip those models.
         if not model_writer.check_model_exists(md["id"]):
-            reasons['model_exists'] += 1   
+            reasons["model_exists"] += 1
             continue
 
         try:
             if md["task"]["num_classes"] != task.num_classes:
-                reasons['num_classes'] += 1
+                reasons["num_classes"] += 1
                 continue
         except KeyError:
             # Older datasets will not have num_classes in their metadata
@@ -137,7 +144,7 @@ def get_matching_subject_models_names(
 
         try:
             if md["task"]["num_examples"] != task.num_examples:
-                reasons['num_examples'] += 1
+                reasons["num_examples"] += 1
                 continue
         except KeyError:
             # Older datasets will not have num_examples in their metadata
@@ -145,8 +152,12 @@ def get_matching_subject_models_names(
             pass
 
         try:
-            if md['example']['variant'] not in variant_range:
-                reasons['variant'] += 1
+            if (
+                variants is not None
+                and variants[0] != -1
+                and md["model"]["variant"] not in variants
+            ):
+                reasons["variant"] += 1
                 continue
         except KeyError:
             # Older models will not have variant in their metadata

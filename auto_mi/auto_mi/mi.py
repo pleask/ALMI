@@ -21,8 +21,6 @@ CRITERION = nn.BCEWithLogitsLoss()
 
 # TODO: subject_model can go into the IO class rather than be passed in here
 def train_mi_model(
-    run,
-    interpretability_model,
     interpretability_model_io,
     subject_model,
     subject_model_io,
@@ -34,6 +32,11 @@ def train_mi_model(
     lr=1e-5,
     subject_model_count=-1,
     split_on_variants=False,
+    variant=-1,
+    num_layers=6,
+    num_heads=8,
+    positional_encoding_size=2048,
+    load_interpretability_model=None,
 ):
     """
     Trains an interpretability transformer model on the specified subject models.
@@ -51,6 +54,7 @@ def train_mi_model(
             subject_model_io,
             trainer,
             task=task,
+            variants=[variant],
         )
         if subject_model_count > 0:
             all_subject_models = all_subject_models[:subject_model_count]
@@ -63,13 +67,13 @@ def train_mi_model(
             subject_model_io,
             trainer,
             task=task,
-            variant_range=(0, 70),
+            variant_range=list(range(0, 70)),
         )
         validation_models, _ = get_matching_subject_models_names(
             subject_model_io,
             trainer,
             task=task,
-            variant_range=(70, 100),
+            variants=list(range(70, 100)),
         )
 
     total_model_count = len(validation_models) + len(train_models)
@@ -88,18 +92,37 @@ def train_mi_model(
     train_dataloader = DataLoader(
         train_dataset, batch_size=batch_size, shuffle=True, pin_memory=True
     )
+    validation_dataset = MultifunctionSubjectModelDataset(
+        subject_model_io,
+        validation_models,
+        task,
+        subject_model,
+        normalise=True,
+    )
     validation_dataloader = DataLoader(
-        MultifunctionSubjectModelDataset(
-            subject_model_io,
-            validation_models,
-            task,
-            subject_model,
-            normalise=True,
-        ),
+        validation_dataset,
         batch_size=batch_size,
         shuffle=True,
         pin_memory=True,
     )
+
+    interpretability_model = Transformer(
+        max(train_dataset.max_elements, validation_dataset.max_elements),
+        task.mi_output_shape,
+        num_layers=num_layers,
+        num_heads=num_heads,
+        positional_encoding_size=positional_encoding_size,
+    ).to(device)
+    interpretability_model_parameter_count = sum(
+        p.numel() for p in interpretability_model.parameters()
+    )
+    print(
+        f"Interpretability model parameter count: {'{:,}'.format(interpretability_model_parameter_count)}"
+    )
+    if load_interpretability_model:
+        interpretability_model = interpretability_model_io.get_model(
+            interpretability_model, load_interpretability_model
+        )
 
     # Log a histogram of the subject model losses
     subject_model_losses = [
@@ -129,14 +152,17 @@ def train_mi_model(
 
     for epoch in tqdm(range(epochs), desc="Interpretability model epochs"):
         interpretability_model.train()
-        total_loss = 0.
-        for i, (inputs, targets) in enumerate(train_dataloader):
+        total_loss = 0.0
+        for i, (inputs, masks, targets) in enumerate(train_dataloader):
             optimizer.zero_grad()
-            outputs = interpretability_model(inputs.to(device, non_blocking=True))
+            outputs = interpretability_model(inputs.to(device, non_blocking=True), masks.to(device, non_blocking=True))
             loss = 0
             for i in range(outputs.shape[1]):
                 loss += CRITERION(outputs[:, i], targets[:, i].to(device))
             loss.backward()
+            for name, param in interpretability_model.named_parameters():
+                if param.grad is not None:
+                    print(name, param.grad)
             torch.nn.utils.clip_grad_norm_(interpretability_model.parameters(), 0.5)
             optimizer.step()
             wandb.log({"train_loss": loss})
@@ -149,13 +175,15 @@ def train_mi_model(
         )
         wandb.log(
             {
-                'validation_loss': eval_loss,
-                'validation_accuracy': accuracy,
+                "validation_loss": eval_loss,
+                "validation_accuracy": accuracy,
             }
         )
-        tqdm.write(f'Epoch: {epoch}, Train Loss: {avg_train_loss}, Validation Loss: {eval_loss}, Validation Accuracy: {accuracy}')
+        tqdm.write(
+            f"Epoch: {epoch}, Train Loss: {avg_train_loss}, Validation Loss: {eval_loss}, Validation Accuracy: {accuracy}"
+        )
 
-        interpretability_model_io.write_model(run.id, interpretability_model)
+        # interpretability_model_io.write_model(run.id, interpretability_model)
 
 
 def _evaluate(interpretability_model, validation_dataloader, device="cuda"):
@@ -180,24 +208,6 @@ def _evaluate(interpretability_model, validation_dataloader, device="cuda"):
         accuracy /= len(validation_dataloader)
 
     return eval_loss, accuracy
-
-
-def evaluate_interpretability_model(
-    interpretability_model_id,
-    interpretability_model,
-    interpretability_model_io,
-    subject_model,
-    subject_model_io,
-    task,
-    trainer,
-    subject_model_count=100,
-    batch_size=2**5,
-    device="cuda",
-):
-    """
-    Evaluates an interpretability model on the specified subject models.
-    """
-    raise NotImplementedError("Method removed in favour of wandb logging.")
 
 
 class MultifunctionSubjectModelDataset(Dataset):
@@ -243,7 +253,7 @@ class MultifunctionSubjectModelDataset(Dataset):
         metadata = self.metadata[name]
 
         example = self.task.get_dataset(metadata["index"], type=MI)
-        # TODO: Something is broken with the datasets so here's a workaround 
+        # TODO: Something is broken with the datasets so here's a workaround
         example._permutation_map = metadata["example"]["permutation_map"]
         y = example.get_target()
 
@@ -252,11 +262,14 @@ class MultifunctionSubjectModelDataset(Dataset):
             variant = metadata["model"]["variant"]
         except KeyError:
             variant = -1
-        model = self._model_loader.get_model(self.subject_model(self.task, variant=variant), name)
+        model = self._model_loader.get_model(
+            self.subject_model(self.task, variant=variant), name
+        )
 
         x = torch.concat(
             [param.detach().reshape(-1) for _, param in model.named_parameters()]
         )
+        mask = torch.ones(len(x))
 
         try:
             if self._normalise:
@@ -264,17 +277,14 @@ class MultifunctionSubjectModelDataset(Dataset):
 
             if len(x) < self.max_elements:
                 x = torch.nn.functional.pad(x, (0, self.max_elements - len(x)))
-        except AttributeError:
+                mask = torch.nn.functional.pad(mask, (0, self.max_elements - len(mask)))
+
+            self._data[idx] = (x, y)
+        except AttributeError as e:
             # If we haven't parameterised the normalisation yet, just skip.
             pass
 
-        try:
-            self._data[idx] = (x, y)
-        except AttributeError:
-            # The time we run this we don't know what the max length in the data is.
-            pass
-
-        return x, y
+        return x, mask, y
 
     def _index_metadata(self):
         d = {}
@@ -317,6 +327,7 @@ class Transformer(nn.Module, MetadataBase):
     Chunks the input and embeds each chunk separately before passing it through
     the transformer.
     """
+
     def __init__(
         self,
         subject_model_parameter_count,
@@ -324,7 +335,7 @@ class Transformer(nn.Module, MetadataBase):
         num_layers=6,
         num_heads=8,
         positional_encoding_size=4096,
-        chunk_size = 128,
+        chunk_size=128,
     ):
         super().__init__()
         self.out_shape = out_shape
@@ -356,35 +367,50 @@ class Transformer(nn.Module, MetadataBase):
         self.fc = nn.Linear(self.positional_encoding.length, output_size)
 
         self.apply(self._init_weights)
-    
+
     def _init_weights(self, module):
         if isinstance(module, nn.Linear):
-            nn.init.kaiming_normal_(module.weight, nonlinearity='relu')
+            nn.init.kaiming_normal_(module.weight, nonlinearity="relu")
         elif isinstance(module, nn.TransformerEncoderLayer):
-            nn.init.kaiming_normal_(module.self_attn.in_proj_weight, nonlinearity='relu')
-            nn.init.kaiming_normal_(module.linear1.weight, nonlinearity='relu')
-            nn.init.kaiming_normal_(module.linear2.weight, nonlinearity='relu')
-    
-    def _chunk_input(self, x):
+            nn.init.kaiming_normal_(
+                module.self_attn.in_proj_weight, nonlinearity="relu"
+            )
+            nn.init.kaiming_normal_(module.linear1.weight, nonlinearity="relu")
+            nn.init.kaiming_normal_(module.linear2.weight, nonlinearity="relu")
+
+    def _chunk_input(self, x, masks):
         _, seq_len = x.size()
         num_chunks = (seq_len - 1) // self._chunk_size + 1
-        chunks = []
+        x_chunks = []
+        mask_chunks = []
         for i in range(num_chunks):
             start = i * self._chunk_size
             end = min((i + 1) * self._chunk_size, seq_len)
-            chunk = x[:, start:end]
+            chunk, mask = x[:, start:end], masks[:, start:end]
             if chunk.size(1) < self._chunk_size:
-                padding = torch.zeros((chunk.size(0), self._chunk_size - chunk.size(1))).to(chunk.device)
+                padding = torch.zeros(
+                    (chunk.size(0), self._chunk_size - chunk.size(1))
+                ).to(chunk.device)
                 chunk = torch.cat((chunk, padding), dim=1)
-            chunks.append(chunk)
-        stacked_chunks = torch.stack(chunks, dim=1)
-        return stacked_chunks
+                mask = torch.cat((mask, padding), dim=1)
+            x_chunks.append(chunk)
+            mask_chunks.append(mask)
+            
+        x_chunks = torch.stack(x_chunks, dim=1)
+        mask_chunks = torch.stack(mask_chunks, dim=1)
+        mask_chunks = (mask_chunks.sum(dim=2) != 0).float()
+        print(mask_chunks)
+        quit()
+        return x_chunks, mask_chunks
 
-    def forward(self, x):
-        x = self._chunk_input(x)
+    def forward(self, x, masks):
+        """
+        masks represents which values of the inputs were padded.
+        """
+        x, mask = self._chunk_input(x, masks)
         x = self.embedding(x) * math.sqrt(self.positional_encoding.length)
         x = self.positional_encoding(x)
-        x = self.transformer_encoder(x)
+        x = self.transformer_encoder(x, src_key_padding_mask=mask)
         x = x.transpose(1, 2)
         x = self.global_avg_pooling(x).squeeze(2)
         output = self.fc(x)

@@ -5,11 +5,7 @@ import argparse
 import wandb
 
 from auto_mi.trainers import AdamTrainer
-from auto_mi.mi import (
-    Transformer,
-    train_mi_model,
-    evaluate_interpretability_model,
-)
+from auto_mi.mi import train_mi_model
 from auto_mi.subject_models import evaluate_subject_model, train_subject_models
 
 
@@ -165,6 +161,12 @@ def train_cli(
         action="store_true",
         help="Whether to split on variants, i.e. evaluate the interpretability model on a disjoint set of subject model variants to those used for training.",
     )
+    interpretability_model_group.add_argument(
+        "--interpretability_model_specify_variant",
+        type=int,
+        default=-1,
+        help="If specified, only train the interpretability model on the specified variant.",
+    )
 
     args = parser.parse_args()
 
@@ -189,31 +191,8 @@ def train_cli(
         device=args.device,
     )
 
-    interpretability_model = Transformer(
-        subject_model_parameter_count,
-        task.mi_output_shape,
-        num_layers=args.interpretability_model_num_layers,
-        num_heads=args.interpretability_model_num_heads,
-        positional_encoding_size=args.interpretability_model_positional_encoding_size,
-    ).to(args.device)
-    if args.interpretability_model_resume:
-        interpretability_model = interpretability_model_io.get_model(
-            interpretability_model, args.interpretability_model_resume
-        )
-
     if args.evaluate_subject_models:
         evaluate_subject_model(task, subject_model_class, subject_model_io, trainer)
-        quit()
-    if args.evaluate_interpretability_model:
-        evaluate_interpretability_model(
-            args.evaluate_interpretability_model,
-            interpretability_model,
-            interpretability_model_io,
-            subject_model_class,
-            subject_model_io,
-            task,
-            trainer,
-        )
         quit()
 
     if args.train_subject_models:
@@ -241,15 +220,7 @@ def train_cli(
         wandb.config.update(args, allow_val_change=True)
         wandb.config.update({"num_classes": task.output_shape[0]})
 
-        interpretability_model_parameter_count = sum(
-            p.numel() for p in interpretability_model.parameters()
-        )
-        print(
-            f"Interpretability model parameter count: {'{:,}'.format(interpretability_model_parameter_count)}"
-        )
         train_mi_model(
-            run,
-            interpretability_model,
             interpretability_model_io,
             subject_model_class,
             subject_model_io,
@@ -261,4 +232,9 @@ def train_cli(
             lr=args.interpretability_model_lr,
             epochs=args.interpretability_model_epochs,
             split_on_variants=args.interpretability_model_split_on_variants,
+            variant=args.interpretability_model_specify_variant,
+            num_layers=args.interpretability_model_num_layers,
+            num_heads=args.interpretability_model_num_heads,
+            positional_encoding_size=args.interpretability_model_positional_encoding_size,
+            load_interpretability_model=args.interpretability_model_resume,
         )
