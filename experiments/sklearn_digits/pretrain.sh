@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH -N 1
 #SBATCH -c 1
-#SBATCH --mem=4G
+#SBATCH --mem=1G
 #SBATCH -p shared
 #SBATCH --time=2-00:00:00
 #SBATCH --output=/nobackup/wclv88/sklearn_digits/outs/slurm-%A_%a.out
