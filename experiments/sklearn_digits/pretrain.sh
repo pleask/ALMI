@@ -15,7 +15,7 @@ WANDB_DISABLED=true \
 stdbuf -oL \
 /home3/wclv88/bounding-mi/bin/python \
 bounding-mi-repo/experiments/sklearn_digits/benchmark.py \
---seed 0 \
+--seed $SLURM_ARRAY_TASK_ID \
 --device cuda \
 --train_subject_models \
 --subject_model_count 1000 \
