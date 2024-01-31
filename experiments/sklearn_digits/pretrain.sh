@@ -14,7 +14,7 @@ COUNT=10
 
 WANDB_DISABLED=true \
 stdbuf -oL \
-/home3/wclv88/bounding-mi/bin/python \
+python3 \
 bounding-mi-repo/experiments/sklearn_digits/benchmark.py \
 --seed 0 \
 --device cpu \
