@@ -27,9 +27,12 @@ def train_subject_models(
     are used to validate the performance of the interpretability model on
     subject models created by this trainer.
     """
+
+    get_idx = lambda i: start_example + i
+
     nets = [model(task, variant=variant).to(device) for _ in range(count)]
 
-    train_examples = [task.get_dataset(start_example + i) for i in range(count)]
+    train_examples = [task.get_dataset(get_idx(i)) for i in range(count)]
     validation_examples = [
         task.get_dataset(start_example + i, type=VAL) for i in range(count)
     ]
@@ -56,7 +59,7 @@ def train_subject_models(
                 "train_loss": train_loss,
                 "id": str(net_id),
                 "time": strftime("%Y-%m-%d %H:%M:%S", gmtime()),
-                "index": i,
+                "index": get_idx(i),
             }
         )
         model_writer.write_model(net_id, net)
@@ -88,10 +91,10 @@ def evaluate_subject_model(
         example = task.get_dataset(metadata[model_idx]["index"], type=VAL)
         model_id = metadata[model_idx]["id"]
         p1 = metadata[model_idx]["example"]["permutation_map"]
-        print(p1)
+        print('metadata:', p1)
         p2 = example._permutation_map
-        print(p2)
-        permutation_map = p2
+        print('example:', p2)
+        permutation_map = p1
         print(f"Permutation map: {permutation_map}")
         model = subject_model_io.get_model(
             subject_model_class(variant=metadata[model_idx]["model"]["variant"]),
