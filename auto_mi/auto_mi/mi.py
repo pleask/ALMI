@@ -160,9 +160,6 @@ def train_mi_model(
             for i in range(outputs.shape[1]):
                 loss += CRITERION(outputs[:, i], targets[:, i].to(device))
             loss.backward()
-            for name, param in interpretability_model.named_parameters():
-                if param.grad is not None:
-                    print(name, param.grad)
             torch.nn.utils.clip_grad_norm_(interpretability_model.parameters(), 0.5)
             optimizer.step()
             wandb.log({"train_loss": loss})
@@ -192,8 +189,8 @@ def _evaluate(interpretability_model, validation_dataloader, device="cuda"):
 
     interpretability_model.eval()
     with torch.no_grad():
-        for inputs, targets in validation_dataloader:
-            outputs = interpretability_model(inputs.to(device))
+        for inputs, masks, targets in validation_dataloader:
+            outputs = interpretability_model(inputs.to(device), masks.to(device))
             loss = CRITERION(outputs, targets.to(device))
             eval_loss += loss.item()
             predicted_classes = torch.argmax(outputs, dim=-1)
@@ -279,7 +276,7 @@ class MultifunctionSubjectModelDataset(Dataset):
                 x = torch.nn.functional.pad(x, (0, self.max_elements - len(x)))
                 mask = torch.nn.functional.pad(mask, (0, self.max_elements - len(mask)))
 
-            self._data[idx] = (x, y)
+            self._data[idx] = (x, mask, y)
         except AttributeError as e:
             # If we haven't parameterised the normalisation yet, just skip.
             pass
@@ -371,11 +368,9 @@ class Transformer(nn.Module, MetadataBase):
 
     def _init_weights(self, module):
         if isinstance(module, nn.Linear):
-            nn.init.kaiming_normal_(module.weight, nonlinearity="relu")
+            nn.init.xavier_uniform_(module.weight)
         elif isinstance(module, nn.TransformerEncoderLayer):
-            nn.init.kaiming_normal_(
-                module.self_attn.in_proj_weight, nonlinearity="relu"
-            )
+            nn.init.xavier_uniform_(module.self_attn.in_proj_weight)
             nn.init.kaiming_normal_(module.linear1.weight, nonlinearity="relu")
             nn.init.kaiming_normal_(module.linear2.weight, nonlinearity="relu")
 
@@ -400,8 +395,6 @@ class Transformer(nn.Module, MetadataBase):
         x_chunks = torch.stack(x_chunks, dim=1)
         mask_chunks = torch.stack(mask_chunks, dim=1)
         mask_chunks = (mask_chunks.sum(dim=2) != 0).float()
-        print(mask_chunks)
-        quit()
         return x_chunks, mask_chunks
 
     def forward(self, x, masks):
