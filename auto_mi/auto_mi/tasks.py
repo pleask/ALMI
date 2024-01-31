@@ -77,6 +77,8 @@ class SimpleTask(Task):
         )
         self._input_shape = input_shape
         self.permutations = list(permutations(range(num_classes)))
+        rng = random.Random(seed)
+        rng.shuffle(self.permutations)
         self.example_class = example_class
 
     def get_dataset(self, i, type=TRAIN, **_):
