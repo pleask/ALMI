@@ -12,7 +12,14 @@ TRAIN_RATIO = 0.7
 
 
 def train_subject_models(
-    task, model, trainer, model_writer, count=10, device="cpu", variant=0
+    task,
+    model,
+    trainer,
+    model_writer,
+    count=10,
+    device="cpu",
+    variant=0,
+    start_example=0,
 ):
     """
     Trains subject models using the specified trainer. Returns the average loss
@@ -21,23 +28,28 @@ def train_subject_models(
     subject models created by this trainer.
     """
     nets = [model(task, variant=variant).to(device) for _ in range(count)]
-    targets = [task.get_dataset(i).get_target() for i in range(count)]
+
+    train_datasets = [task.get_dataset(start_example + i) for i in range(count)]
+    validation_datasets = [
+        task.get_dataset(start_example + i, type=VAL) for i in range(count)
+    ]
+
     losses, train_losses = trainer.train_parallel(
         nets,
-        [task.get_dataset(i) for i in range(count)],
-        [task.get_dataset(i, type=VAL) for i in range(count)],
+        train_datasets,
+        validation_datasets,
     )
 
     print("Writing models to disk...")
     model_ids = []
-    for i, (net, target, loss, train_loss) in enumerate(
-        zip(nets, targets, losses, train_losses)
+    for i, (net, train_dataset, loss, train_loss) in enumerate(
+        zip(nets, train_datasets, losses, train_losses)
     ):
         net_id = str(uuid.uuid4())
         model_writer.write_metadata(
             md={
                 "task": task.get_metadata(),
-                "example": task.get_dataset(i).get_metadata(),
+                "example": train_dataset.get_metadata(),
                 "model": net.get_metadata(),
                 "trainer": trainer.get_metadata(),
                 "loss": loss,

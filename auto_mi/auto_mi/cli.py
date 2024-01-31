@@ -94,6 +94,12 @@ def train_cli(
         help="Which variant of the subject model to use. Between 0 and 99 inclusive.",
         default=0,
     )
+    subject_model_group.add_argument(
+        "--example_start_index",
+        type=int,
+        help="Example index from which to start.",
+        default=0,
+    )
 
     interpretability_model_group = parser.add_argument_group(
         "Interpretability Model Arguments"
@@ -204,6 +210,7 @@ def train_cli(
             subject_model_io,
             count=args.subject_model_count,
             variant=args.subject_model_variant,
+            start_example=args.example_start_index,
         )
     else:
         wandb_kwargs = {}
