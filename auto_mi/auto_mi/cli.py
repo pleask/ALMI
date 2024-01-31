@@ -52,7 +52,7 @@ def train_cli(
     subject_model_group.add_argument(
         "--subject_model_count",
         type=int,
-        help="Number of subject models to train.",
+        help="Number of subject models to train or evaluate.",
         default=10,
     )
     subject_model_group.add_argument(
@@ -198,7 +198,7 @@ def train_cli(
     )
 
     if args.evaluate_subject_models:
-        evaluate_subject_model(task, subject_model_class, subject_model_io, trainer)
+        evaluate_subject_model(task, subject_model_class, subject_model_io, trainer, model_count=args.subject_model_count)
         quit()
 
     if args.train_subject_models:

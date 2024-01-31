@@ -250,7 +250,6 @@ class MultifunctionSubjectModelDataset(Dataset):
         metadata = self.metadata[name]
 
         example = self.task.get_dataset(metadata["index"], type=MI)
-        example._permutation_map = metadata["example"]["permutation_map"]
         y = example.get_target()
 
         # TODO: Can move the variant code to the loader later on

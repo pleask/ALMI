@@ -29,21 +29,21 @@ def train_subject_models(
     """
     nets = [model(task, variant=variant).to(device) for _ in range(count)]
 
-    train_datasets = [task.get_dataset(start_example + i) for i in range(count)]
-    validation_datasets = [
+    train_examples = [task.get_dataset(start_example + i) for i in range(count)]
+    validation_examples = [
         task.get_dataset(start_example + i, type=VAL) for i in range(count)
     ]
 
     losses, train_losses = trainer.train_parallel(
         nets,
-        train_datasets,
-        validation_datasets,
+        train_examples,
+        validation_examples,
     )
 
     print("Writing models to disk...")
     model_ids = []
     for i, (net, train_dataset, loss, train_loss) in enumerate(
-        zip(nets, train_datasets, losses, train_losses)
+        zip(nets, train_examples, losses, train_losses)
     ):
         net_id = str(uuid.uuid4())
         model_writer.write_metadata(
@@ -85,10 +85,13 @@ def evaluate_subject_model(
     accuracies = []
     for model_idx in range(min(model_count, len(metadata))):
         print(f"Model {model_idx}")
-        task.seed = metadata[model_idx]["task"]["seed"]
         example = task.get_dataset(metadata[model_idx]["index"], type=VAL)
         model_id = metadata[model_idx]["id"]
-        permutation_map = metadata[model_idx]["example"]["permutation_map"]
+        p1 = metadata[model_idx]["example"]["permutation_map"]
+        print(p1)
+        p2 = example._permutation_map
+        print(p2)
+        permutation_map = p2
         print(f"Permutation map: {permutation_map}")
         model = subject_model_io.get_model(
             subject_model_class(variant=metadata[model_idx]["model"]["variant"]),
