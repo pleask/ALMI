@@ -226,6 +226,7 @@ def train_cli(
         )
         wandb.config.update(args, allow_val_change=True)
         wandb.config.update({"num_classes": task.output_shape[0]})
+        wandb.save(subject_model_io.index_file)
 
         train_mi_model(
             interpretability_model_io,

@@ -34,7 +34,7 @@ class PermutedDigitsExample(SimpleExample):
 class DigitsClassifier(nn.Module, MetadataBase):
     def __init__(self, *_, variant=0): 
         """
-        Variant 70 is the smallest subject model.
+        Variant 70 is the smallest subject modelscontrol show job <job_id>.
         """
         super().__init__()
 

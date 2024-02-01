@@ -32,6 +32,10 @@ class ModelWriter(ABC):
     def check_model_exists(self, id):
         pass
 
+    @staticmethod
+    def index_file(self):
+        return os.path.join(self.dir, "index.txt")
+
 
 class ConcurrentMetadataWriter(ModelWriter):
     """
