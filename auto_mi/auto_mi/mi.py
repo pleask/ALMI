@@ -100,6 +100,11 @@ def train_mi_model(
         subject_model,
         normalise=True,
     )
+    # Make sure the validation dataset uses the same normalisation as the train
+    if train_dataset._normalise:
+        validation_dataset._std = train_dataset._std
+        validation_dataset._mean = train_dataset._mean
+        validation_dataset._normalise = True
     validation_dataloader = DataLoader(
         validation_dataset,
         batch_size=batch_size,
