@@ -17,6 +17,7 @@ stdbuf -oL \
 python3 \
 bounding-mi-repo/experiments/sklearn_digits/benchmark.py \
 --seed 0 \
+--device cpu \
 --train_subject_models \
 --subject_model_count 10 \
 --subject_model_path /nobackup/wclv88/sklearn_digits/variant_data/subject-models \
