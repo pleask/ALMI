@@ -20,12 +20,12 @@ from auto_mi.cli import train_cli
 
 class PermutedIrisTask(SimpleTask):
     def __init__(self, seed=0., train=True, **kwargs):
-        super().__init__(PermutedIrisExample, (4,), 3, seed=seed, train=train)
+        super().__init__(PermutedIrisExample, (4,), num_classes=3, seed=seed, train=train)
 
 
 class PermutedIrisExample(SimpleExample):
-    def __init__(self, permutation_map, type=TRAIN):
-        super().__init__(permutation_map, type)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
     def _get_dataset(self):
         iris_dataset = datasets.load_iris()
@@ -39,7 +39,7 @@ class PermutedIrisExample(SimpleExample):
 
 
 class IrisClassifier(nn.Module, MetadataBase):
-    def __init__(self, *_):
+    def __init__(self, *_, **__):
         super(IrisClassifier, self).__init__()
         self.fc1 = nn.Linear(4, 8)
         self.relu = nn.ReLU()

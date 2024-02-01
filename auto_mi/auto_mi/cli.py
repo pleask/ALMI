@@ -229,6 +229,7 @@ def train_cli(
         wandb.save(subject_model_io.index_file)
 
         train_mi_model(
+            run,
             interpretability_model_io,
             subject_model_class,
             subject_model_io,

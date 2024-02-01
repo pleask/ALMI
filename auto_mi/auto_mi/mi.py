@@ -21,6 +21,7 @@ CRITERION = nn.BCEWithLogitsLoss()
 
 # TODO: subject_model can go into the IO class rather than be passed in here
 def train_mi_model(
+    run,
     interpretability_model_io,
     subject_model,
     subject_model_io,
@@ -180,7 +181,7 @@ def train_mi_model(
             f"Epoch: {epoch}, Train Loss: {avg_train_loss}, Validation Loss: {eval_loss}, Validation Accuracy: {accuracy}"
         )
 
-        # interpretability_model_io.write_model(run.id, interpretability_model)
+        interpretability_model_io.write_model(run.id, interpretability_model)
 
 
 def _evaluate(interpretability_model, validation_dataloader, device="cuda"):
@@ -372,28 +373,20 @@ class Transformer(nn.Module, MetadataBase):
             nn.init.kaiming_normal_(module.linear1.weight, nonlinearity="relu")
             nn.init.kaiming_normal_(module.linear2.weight, nonlinearity="relu")
 
+    def _pad_to_factor(self, x):
+        padding = self._chunk_size - (x.size(1) % self._chunk_size)
+        if padding != self._chunk_size:
+            x = torch.nn.functional.pad(x, (0, padding))
+        return x
+
+    def _chunk(self, x):
+        return x.view(x.size(0), x.size(1) // self._chunk_size, self._chunk_size)
+
     def _chunk_input(self, x, masks):
-        _, seq_len = x.size()
-        num_chunks = (seq_len - 1) // self._chunk_size + 1
-        x_chunks = []
-        mask_chunks = []
-        for i in range(num_chunks):
-            start = i * self._chunk_size
-            end = min((i + 1) * self._chunk_size, seq_len)
-            chunk, mask = x[:, start:end], masks[:, start:end]
-            if chunk.size(1) < self._chunk_size:
-                padding = torch.zeros(
-                    (chunk.size(0), self._chunk_size - chunk.size(1))
-                ).to(chunk.device)
-                chunk = torch.cat((chunk, padding), dim=1)
-                mask = torch.cat((mask, padding), dim=1)
-            x_chunks.append(chunk)
-            mask_chunks.append(mask)
-            
-        x_chunks = torch.stack(x_chunks, dim=1)
-        mask_chunks = torch.stack(mask_chunks, dim=1)
-        mask_chunks = (mask_chunks.sum(dim=2) != 0).float()
-        return x_chunks, mask_chunks
+        x, masks = self._pad_to_factor(x), self._pad_to_factor(masks)
+        x, masks = self._chunk(x), self._chunk(masks)
+        masks = (masks.sum(dim=2) != 0).float()
+        return x, masks
 
     def forward(self, x, masks):
         """

@@ -90,14 +90,13 @@ def evaluate_subject_model(
         print(f"Model {model_idx}")
         example = task.get_dataset(metadata[model_idx]["index"], type=VAL)
         model_id = metadata[model_idx]["id"]
-        p1 = metadata[model_idx]["example"]["permutation_map"]
-        print('metadata:', p1)
-        p2 = example._permutation_map
-        print('example:', p2)
-        permutation_map = p1
-        print(f"Permutation map: {permutation_map}")
+        print(f"Permutation map: {example._permutation_map}")
+        try:
+            subject_model = subject_model_class(variant=metadata[model_idx]["model"]["variant"])
+        except KeyError:
+            subject_model = subject_model_class()
         model = subject_model_io.get_model(
-            subject_model_class(variant=metadata[model_idx]["model"]["variant"]),
+            subject_model,
             model_id,
         )
         correct = []
