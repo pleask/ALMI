@@ -95,16 +95,16 @@ def train_mi_model(
     )
     validation_dataset = MultifunctionSubjectModelDataset(
         subject_model_io,
-        validation_models,
+        train_models,
         task,
         subject_model,
-        normalise=True,
     )
     # Make sure the validation dataset uses the same normalisation as the train
     if train_dataset._normalise:
         validation_dataset._std = train_dataset._std
         validation_dataset._mean = train_dataset._mean
         validation_dataset._normalise = True
+
     validation_dataloader = DataLoader(
         validation_dataset,
         batch_size=batch_size,
@@ -156,12 +156,16 @@ def train_mi_model(
         interpretability_model = torch.compile(interpretability_model)
         torch.backends.cuda.matmul.allow_tf32 = True
 
-    for epoch in tqdm(range(epochs), desc="Interpretability model epochs"):
+    for epoch in tqdm(range(50), desc="Interpretability model epochs"):
         interpretability_model.train()
         total_loss = 0.0
         for i, (inputs, masks, targets) in enumerate(train_dataloader):
             optimizer.zero_grad()
-            outputs = interpretability_model(inputs.to(device, non_blocking=True), masks.to(device, non_blocking=True))
+            outputs = interpretability_model(
+                inputs.to(device, non_blocking=True),
+                masks.to(device, non_blocking=True),
+            )
+            predicted_classes = torch.argmax(outputs, dim=-1)
             loss = 0
             for i in range(outputs.shape[1]):
                 loss += CRITERION(outputs[:, i], targets[:, i].to(device))
@@ -193,7 +197,8 @@ def _evaluate(interpretability_model, validation_dataloader, device="cuda"):
     eval_loss = 0.0
     accuracy = 0.0
 
-    interpretability_model.eval()
+    # TODO: Figure out why setting the model to eval breaks validation
+    # interpretability_model.eval()
     with torch.no_grad():
         for inputs, masks, targets in validation_dataloader:
             outputs = interpretability_model(inputs.to(device), masks.to(device))
@@ -302,7 +307,6 @@ class MultifunctionSubjectModelDataset(Dataset):
         return self[0][1].shape
 
 
-# TODO: Use dropout
 class PositionalEncoding(nn.Module):
     def __init__(self, encoding_length=4, max_len=512):
         super(PositionalEncoding, self).__init__()
