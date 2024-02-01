@@ -1,23 +1,22 @@
 #!/bin/bash
 #SBATCH -N 1
-#SBATCH -c 4
-#SBATCH -p res-gpu-small
-#SBATCH --qos=short
-#SBATCH --time=1-00:00:00
-#SBATCH --output=sklearn_digits/variant_data/outs/slurm-%j.out
-#SBATCH --array=0-19
-#SBATCH --gres=gpu
+#SBATCH -c 1
+#SBATCH --mem=1G
+#SBATCH -p shared
+#SBATCH --time=2-00:00:00
+#SBATCH --output=/nobackup/wclv88/sklearn_digits/outs/slurm-%A_%a.out
+#SBATCH --array=0-199
 
-source /etc/profile
-module load cuda/11.7
+module load python/3.10.8
+module load $PYTHON_BUILD_MODULES
 
-COUNT=1000
+COUNT=10
 
 WANDB_DISABLED=true \
-stdbuf -oL /home3/wclv88/bounding-mi/bin/python \
+stdbuf -oL \
+python3 \
 bounding-mi-repo/experiments/sklearn_digits/benchmark.py \
 --seed 0 \
---device cuda \
 --train_subject_models \
 --subject_model_count 1000 \
 --subject_model_path sklearn_digits/variant_data/subject-models \
