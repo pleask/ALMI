@@ -33,7 +33,8 @@ def train_mi_model(
     lr=1e-5,
     subject_model_count=-1,
     split_on_variants=False,
-    variant=-1,
+    variant_range_start=-1,
+    variant_range_end=-1,
     num_layers=6,
     num_heads=8,
     positional_encoding_size=2048,
@@ -55,7 +56,7 @@ def train_mi_model(
             subject_model_io,
             trainer,
             task=task,
-            variants=[variant],
+            variants=list(range(variant_range_start, variant_range_end)),
         )
         if subject_model_count > 0:
             all_subject_models = all_subject_models[:subject_model_count]
@@ -268,9 +269,13 @@ class MultifunctionSubjectModelDataset(Dataset):
             variant = metadata["model"]["variant"]
         except KeyError:
             variant = -1
-        model = self._model_loader.get_model(
-            self.subject_model(self.task, variant=variant), name
-        )
+        try:
+            model = self._model_loader.get_model(
+                self.subject_model(self.task, variant=variant), name
+            )
+        except Exception:
+            print(name)
+            quit()
 
         x = torch.concat(
             [param.detach().reshape(-1) for _, param in model.named_parameters()]

@@ -168,10 +168,16 @@ def train_cli(
         help="Whether to split on variants, i.e. evaluate the interpretability model on a disjoint set of subject model variants to those used for training.",
     )
     interpretability_model_group.add_argument(
-        "--interpretability_model_specify_variant",
+        "--interpretability_model_variant_range_start",
         type=int,
         default=-1,
-        help="If specified, only train the interpretability model on the specified variant.",
+        help="If specified, the start of the variant range to use.",
+    )
+    interpretability_model_group.add_argument(
+        "--interpretability_model_variant_range_end",
+        type=int,
+        default=-1,
+        help="If specified, the end of the variant range to use.",
     )
 
     args = parser.parse_args()
@@ -241,7 +247,8 @@ def train_cli(
             lr=args.interpretability_model_lr,
             epochs=args.interpretability_model_epochs,
             split_on_variants=args.interpretability_model_split_on_variants,
-            variant=args.interpretability_model_specify_variant,
+            variant_range_start=args.interpretability_model_variant_range_start,
+            variant_range_end=args.interpretability_model_variant_range_end,
             num_layers=args.interpretability_model_num_layers,
             num_heads=args.interpretability_model_num_heads,
             positional_encoding_size=args.interpretability_model_positional_encoding_size,
