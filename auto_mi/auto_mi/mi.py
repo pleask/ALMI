@@ -128,7 +128,7 @@ def train_mi_model(
     )
     if load_interpretability_model:
         interpretability_model = interpretability_model_io.get_model(
-            interpretability_model, load_interpretability_model
+            interpretability_model, load_interpretability_model, device=device
         )
 
     # Log a histogram of the subject model losses
@@ -157,7 +157,7 @@ def train_mi_model(
         interpretability_model = torch.compile(interpretability_model)
         torch.backends.cuda.matmul.allow_tf32 = True
 
-    for epoch in tqdm(range(50), desc="Interpretability model epochs"):
+    for epoch in tqdm(range(epochs), desc="Interpretability model epochs"):
         interpretability_model.train()
         total_loss = 0.0
         for i, (inputs, masks, targets) in enumerate(train_dataloader):
@@ -166,7 +166,6 @@ def train_mi_model(
                 inputs.to(device, non_blocking=True),
                 masks.to(device, non_blocking=True),
             )
-            predicted_classes = torch.argmax(outputs, dim=-1)
             loss = 0
             for i in range(outputs.shape[1]):
                 loss += CRITERION(outputs[:, i], targets[:, i].to(device))
@@ -192,6 +191,10 @@ def train_mi_model(
         )
 
         interpretability_model_io.write_model(run.id, interpretability_model)
+
+        # Early stopping 
+        if accuracy > 0.99:
+            break
 
 
 def _evaluate(interpretability_model, validation_dataloader, device="cuda"):
@@ -354,7 +357,7 @@ class Transformer(nn.Module, MetadataBase):
         output_size = torch.zeros(out_shape).view(-1).shape[0]
 
         self.positional_encoding = PositionalEncoding(
-            positional_encoding_size, subject_model_parameter_count
+            positional_encoding_size, 20000
         )
 
         self.embedding = nn.Linear(chunk_size, positional_encoding_size)
