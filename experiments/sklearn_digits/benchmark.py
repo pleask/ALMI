@@ -41,9 +41,6 @@ class DigitsClassifier(nn.Module, MetadataBase):
         conv_channel_variants = list(range(20, 30))
         linear_width_variants = list(range(30, 40))
         variants = [(a, b) for a in conv_channel_variants for b in linear_width_variants]   
-
-        rng = random.Random(42)
-        rng.shuffle(variants)
         self.variant = variant
 
         self._conv_channels, self._linear_width = variants[self.variant]

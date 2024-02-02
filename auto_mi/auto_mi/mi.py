@@ -348,7 +348,7 @@ class Transformer(nn.Module, MetadataBase):
         num_layers=6,
         num_heads=8,
         positional_encoding_size=4096,
-        chunk_size=128,
+        chunk_size=8,
     ):
         super().__init__()
         self.out_shape = out_shape
