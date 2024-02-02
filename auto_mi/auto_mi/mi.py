@@ -96,7 +96,7 @@ def train_mi_model(
     )
     validation_dataset = MultifunctionSubjectModelDataset(
         subject_model_io,
-        train_models,
+        validation_models,
         task,
         subject_model,
     )
@@ -201,7 +201,6 @@ def _evaluate(interpretability_model, validation_dataloader, device="cuda"):
     eval_loss = 0.0
     accuracy = 0.0
 
-    # TODO: Figure out why setting the model to eval breaks validation
     # interpretability_model.eval()
     with torch.no_grad():
         for inputs, masks, targets in validation_dataloader:
