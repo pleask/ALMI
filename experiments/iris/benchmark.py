@@ -38,9 +38,9 @@ class PermutedIrisExample(SimpleExample):
 class IrisClassifier(nn.Module, MetadataBase):
     def __init__(self, *_, **__):
         super(IrisClassifier, self).__init__()
-        self.fc1 = nn.Linear(4, 8)
+        self.fc1 = nn.Linear(4, 1000)
         self.relu = nn.ReLU()
-        self.fc2 = nn.Linear(8, 3)
+        self.fc2 = nn.Linear(1000, 3)
         self.softmax = nn.Softmax(dim=-1)
 
     def forward(self, x):

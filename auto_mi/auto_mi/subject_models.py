@@ -32,6 +32,9 @@ def train_subject_models(
 
     nets = [model(task, variant=variant).to(device) for _ in range(count)]
 
+    num_params = sum(p.numel() for p in nets[0].parameters())
+    print(f"Subject model param count: {num_params}")
+
     train_examples = [task.get_dataset(get_idx(i)) for i in range(count)]
     validation_examples = [
         task.get_dataset(start_example + i, type=VAL) for i in range(count)

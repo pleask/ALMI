@@ -243,6 +243,7 @@ def train_mi_model(
     It is assumed that there are 100 variants, and that there are equal numbers
     of each variant.
     """
+    print(f'Training interpretability model, saving to {run.id}')
 
     train_models, validation_models = _get_training_models(
         subject_model_io,
@@ -272,10 +273,10 @@ def train_mi_model(
         normalise=True,
     )
     # Make sure the validation dataset uses the same normalisation as the train
-    # if train_dataset._normalise:
-    #     validation_dataset._std = train_dataset._std
-    #     validation_dataset._mean = train_dataset._mean
-    #     validation_dataset._normalise = True
+    if train_dataset._normalise:
+        validation_dataset._std = train_dataset._std
+        validation_dataset._mean = train_dataset._mean
+        validation_dataset._normalise = True
 
     validation_dataloader = DataLoader(
         validation_dataset,
@@ -370,7 +371,6 @@ def train_mi_model(
             {
                 "validation_loss": eval_loss,
                 "validation_accuracy": accuracy,
-                'train_loss': avg_train_loss,
                 'train_accuracy': avg_train_accuracy
             }
         )
@@ -389,7 +389,7 @@ def _evaluate(criterion,interpretability_model, validation_dataloader, device="c
     eval_loss = 0.0
     accuracy = 0.0
 
-    interpretability_model.eval()
+    # interpretability_model.eval()
     with torch.no_grad():
         for inputs, masks, targets in validation_dataloader:
             try:
@@ -557,7 +557,7 @@ class TransformerEncoder(nn.Module):
         num_layers=6,
         num_heads=8,
         positional_encoding_size=4096,
-        chunk_size=128,
+        chunk_size=1024,
     ):
         super().__init__()
         self.out_shape = out_shape
