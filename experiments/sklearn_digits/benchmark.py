@@ -41,7 +41,7 @@ class DigitsClassifier(nn.Module, MetadataBase):
         conv_channel_variants = list(range(20, 30))
         linear_width_variants = list(range(30, 40))
         variants = [(a, b) for a in conv_channel_variants for b in linear_width_variants]   
-        self.variant = variant
+        self.variant =  variants.index((24, 32))
 
         self._conv_channels, self._linear_width = variants[self.variant]
 

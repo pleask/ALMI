@@ -5,7 +5,7 @@ import argparse
 import wandb
 
 from auto_mi.trainers import AdamTrainer
-from auto_mi.mi import train_mi_model
+from auto_mi.mi import train_mi_model, pretrain_mi_model
 from auto_mi.subject_models import evaluate_subject_model, train_subject_models
 
 
@@ -179,6 +179,11 @@ def train_cli(
         default=-1,
         help="If specified, the end of the variant range to use.",
     )
+    interpretability_model_group.add_argument(
+        "--interpretability_model_pretrain",
+        action="store_true",
+        help="Pretrain the interpretability model on the next token prediction task.",
+    )
 
     args = parser.parse_args()
 
@@ -218,22 +223,45 @@ def train_cli(
             variant=args.subject_model_variant,
             start_example=args.example_start_index,
         )
-    else:
-        wandb_kwargs = {}
-        if args.interpretability_model_resume:
-            wandb_kwargs["resume"] = True
-            wandb_kwargs["id"] = args.interpretability_model_resume
-        run = wandb.init(
-            project="bounding-mi",
-            entity="patrickaaleask",
-            reinit=True,
-            tags=tags,
-            **wandb_kwargs,
-        )
-        wandb.config.update(args, allow_val_change=True)
-        wandb.config.update({"num_classes": task.output_shape[0]})
-        wandb.save(subject_model_io.index_file)
+        quit()
 
+    wandb_kwargs = {}
+    if args.interpretability_model_resume:
+        wandb_kwargs["resume"] = True
+        wandb_kwargs["id"] = args.interpretability_model_resume
+    run = wandb.init(
+        project="bounding-mi",
+        entity="patrickaaleask",
+        reinit=True,
+        tags=tags,
+        **wandb_kwargs,
+    )
+    wandb.config.update(args, allow_val_change=True)
+    wandb.config.update({"num_classes": task.output_shape[0]})
+    wandb.save(subject_model_io.index_file)
+
+    if args.interpretability_model_pretrain:
+        pretrain_mi_model(
+            run,
+            interpretability_model_io,
+            subject_model_class,
+            subject_model_io,
+            trainer,
+            task,
+            device=args.device,
+            batch_size=args.interpretability_model_batch_size,
+            subject_model_count=args.interpretability_model_subject_model_count,
+            lr=args.interpretability_model_lr,
+            epochs=args.interpretability_model_epochs,
+            split_on_variants=args.interpretability_model_split_on_variants,
+            variant_range_start=args.interpretability_model_variant_range_start,
+            variant_range_end=args.interpretability_model_variant_range_end,
+            num_layers=args.interpretability_model_num_layers,
+            num_heads=args.interpretability_model_num_heads,
+            positional_encoding_size=args.interpretability_model_positional_encoding_size,
+            load_interpretability_model=args.interpretability_model_resume,
+        )
+    else:
         train_mi_model(
             run,
             interpretability_model_io,
