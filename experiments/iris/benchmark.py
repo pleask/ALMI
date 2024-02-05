@@ -1,6 +1,6 @@
 import argparse
 import random
-from auto_mi.io import DirModelWriter
+from auto_mi.io import DirModelWriter, TarModelWriter
 
 import numpy as np
 from sklearn import datasets
@@ -53,7 +53,7 @@ class IrisClassifier(nn.Module, MetadataBase):
 if __name__ == '__main__':
     train_cli(
         ['irises'],
-        DirModelWriter,
+        TarModelWriter,
         DirModelWriter,
         PermutedIrisTask,
         IrisClassifier,

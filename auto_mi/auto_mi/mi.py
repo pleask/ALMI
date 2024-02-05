@@ -14,10 +14,8 @@ from tqdm import tqdm
 from auto_mi.tasks import MI
 from auto_mi.base import MetadataBase
 
-VAL_RATIO = 0.5
-TRAIN_RATIO = 0.5
-INTERPRETABILITY_BATCH_SIZE = 2**7
-CRITERION = nn.BCEWithLogitsLoss()
+VAL_RATIO = 0.2
+TRAIN_RATIO = 1 - VAL_RATIO
 
 
 def _get_training_models(
@@ -347,7 +345,7 @@ def train_mi_model(
             )
             loss = 0
             for i in range(outputs.shape[1]):
-                loss += CRITERION(outputs[:, i], targets[:, i].to(device))
+                loss += criterion(outputs[:, i], targets[:, i].to(device))
             loss.backward()
             torch.nn.utils.clip_grad_norm_(interpretability_model.parameters(), 0.5)
             optimizer.step()
@@ -389,7 +387,7 @@ def _evaluate(criterion,interpretability_model, validation_dataloader, device="c
     eval_loss = 0.0
     accuracy = 0.0
 
-    # interpretability_model.eval()
+    interpretability_model.eval()
     with torch.no_grad():
         for inputs, masks, targets in validation_dataloader:
             try:
@@ -486,8 +484,7 @@ class SubjectModelDataset(Dataset, ABC):
         x = torch.concat(
             [param.detach().reshape(-1) for _, param in model.named_parameters()]
         )
-
-        return x, y
+        return x[3820:], y
 
 
 class ClassificationDataset(SubjectModelDataset):
@@ -557,7 +554,7 @@ class TransformerEncoder(nn.Module):
         num_layers=6,
         num_heads=8,
         positional_encoding_size=4096,
-        chunk_size=1024,
+        chunk_size=32,
     ):
         super().__init__()
         self.out_shape = out_shape
@@ -574,6 +571,7 @@ class TransformerEncoder(nn.Module):
             nhead=num_heads,
             dim_feedforward=2048,
             batch_first=True,
+            dropout=0.5,
         )
         self.transformer_encoder = nn.TransformerEncoder(
             encoder_layer,

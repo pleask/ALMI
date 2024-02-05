@@ -1,13 +1,14 @@
 from itertools import combinations
 import os
-import random
-from auto_mi.io import DirModelWriter, TarModelWriter
+import torch
+
 
 from sklearn import datasets
 import torch.nn.functional as F
 import torch.nn as nn
 
 from auto_mi.base import MetadataBase
+from auto_mi.io import DirModelWriter, TarModelWriter
 from auto_mi.tasks import SimpleTask, SimpleExample, TRAIN, MI
 from auto_mi.cli import train_cli
 
@@ -47,6 +48,19 @@ class DigitsClassifier(nn.Module, MetadataBase):
 
         self.conv1 = nn.Conv2d(1, self._conv_channels, kernel_size=3, padding=1)
         self.conv2 = nn.Conv2d(self._conv_channels, self._conv_channels, kernel_size=3, padding=1)
+        self.fc1 = nn.Linear(self._conv_channels * 2 * 2, self._linear_width)
+        self.fc2 = nn.Linear(self._linear_width, 10)
+
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        relative_path = 'base_model.pickle'
+        file_path = os.path.join(current_dir, relative_path)
+
+        base_model = torch.load(file_path)
+        self.load_state_dict(base_model)
+
+        self.conv1.requires_grad = False
+        self.conv2.requires_grad = False
+
         self.fc1 = nn.Linear(self._conv_channels * 2 * 2, self._linear_width)
         self.fc2 = nn.Linear(self._linear_width, 10)
 
