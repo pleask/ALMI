@@ -283,17 +283,21 @@ def train_mi_model(
         pin_memory=True,
     )
 
-    encoder = TransformerEncoder(
-        max(train_dataset.max_elements, validation_dataset.max_elements),
-        task.mi_output_shape,
-        num_layers=num_layers,
-        num_heads=num_heads,
-        positional_encoding_size=positional_encoding_size,
-    )
-    interpretability_model = TransformerClassifierHead(
-        encoder,
-        task.mi_output_shape,
-    ).to(device)
+    # encoder = TransformerEncoder(
+    #     max(train_dataset.max_elements, validation_dataset.max_elements),
+    #     task.mi_output_shape,
+    #     num_layers=num_layers,
+    #     num_heads=num_heads,
+    #     positional_encoding_size=positional_encoding_size,
+    # )
+    # interpretability_model = TransformerClassifierHead(
+    #     encoder,
+    #     task.mi_output_shape,
+    # ).to(device)
+    
+
+    interpretability_model = LSTMClassifier(task.mi_output_shape).to(device)
+
     interpretability_model_parameter_count = sum(
         p.numel() for p in interpretability_model.parameters()
     )
@@ -484,7 +488,7 @@ class SubjectModelDataset(Dataset, ABC):
         x = torch.concat(
             [param.detach().reshape(-1) for _, param in model.named_parameters()]
         )
-        return x[3820:], y
+        return x, y
 
 
 class ClassificationDataset(SubjectModelDataset):
@@ -541,6 +545,21 @@ class PositionalEncoding(nn.Module):
         return x + pe
     
 
+def _pad_to_factor(x, chunk_size=128):
+    padding = chunk_size - (x.size(1) % chunk_size)
+    if padding != chunk_size:
+        x = torch.nn.functional.pad(x, (0, padding))
+    return x
+
+def _chunk(x, chunk_size=128):
+    return x.view(x.size(0), x.size(1) // chunk_size, chunk_size)
+
+def _chunk_input(x, masks, chunk_size=128):
+    x, masks = _pad_to_factor(x, chunk_size=chunk_size), _pad_to_factor(masks, chunk_size=chunk_size)
+    x, masks = _chunk(x, chunk_size=128), _chunk(masks, chunk_size=128)
+    masks = (masks.sum(dim=2) != 0).float()
+    return x, masks
+
 class TransformerEncoder(nn.Module):
     """
     Chunks the input and embeds each chunk separately before passing it through
@@ -554,7 +573,7 @@ class TransformerEncoder(nn.Module):
         num_layers=6,
         num_heads=8,
         positional_encoding_size=4096,
-        chunk_size=32,
+        chunk_size=128,
     ):
         super().__init__()
         self.out_shape = out_shape
@@ -587,26 +606,12 @@ class TransformerEncoder(nn.Module):
             nn.init.kaiming_normal_(module.linear1.weight, nonlinearity="relu")
             nn.init.kaiming_normal_(module.linear2.weight, nonlinearity="relu")
 
-    def _pad_to_factor(self, x):
-        padding = self._chunk_size - (x.size(1) % self._chunk_size)
-        if padding != self._chunk_size:
-            x = torch.nn.functional.pad(x, (0, padding))
-        return x
-
-    def _chunk(self, x):
-        return x.view(x.size(0), x.size(1) // self._chunk_size, self._chunk_size)
-
-    def _chunk_input(self, x, masks):
-        x, masks = self._pad_to_factor(x), self._pad_to_factor(masks)
-        x, masks = self._chunk(x), self._chunk(masks)
-        masks = (masks.sum(dim=2) != 0).float()
-        return x, masks
 
     def forward(self, x, masks):
         """
         masks represents which values of the inputs were padded.
         """
-        x, mask = self._chunk_input(x, masks)
+        x, mask = _chunk_input(x, masks, self.chunk_size)
         x = self.embedding(x) * math.sqrt(self.positional_encoding.length)
         x = self.positional_encoding(x)
         # TODO: Why can't I use the src key padding mask?
@@ -694,3 +699,26 @@ class NextTokenPredictionTransformerHead(nn.Module, MetadataBase):
         output = self.fc(output)
         output = torch.mean(output, dim=1)
         return output
+
+
+class LSTMClassifier(nn.Module):
+    def __init__(self, out_shape, chunk_size=128, hidden_dim=2048, num_layers=2):
+        super().__init__()
+        self.out_shape = out_shape
+        self.chunk_size = chunk_size
+
+        self.embedding = nn.Linear(chunk_size, hidden_dim)
+        self.lstm = nn.LSTM(hidden_dim, hidden_dim, num_layers, batch_first=True)
+
+        output_size = torch.zeros(out_shape).view(-1).shape[0]
+        self.fc = nn.Linear(hidden_dim, output_size)
+
+    def forward(self, x, mask):
+        x, _ = _chunk_input(x, mask, chunk_size=self.chunk_size)
+        x = self.embedding(x)
+        x, _ = self.lstm(x)
+        x = self.fc(x)
+        x = x[:, -1, :]
+        output = x.view(-1, *self.out_shape)
+        return output
+

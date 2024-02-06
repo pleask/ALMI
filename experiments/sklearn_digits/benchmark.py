@@ -60,8 +60,9 @@ class DigitsClassifier(nn.Module, MetadataBase):
 
         self.conv1.requires_grad = False
         self.conv2.requires_grad = False
+        self.fc1.requires_grad = False
 
-        self.fc1 = nn.Linear(self._conv_channels * 2 * 2, self._linear_width)
+        # self.fc1 = nn.Linear(self._conv_channels * 2 * 2, self._linear_width)
         self.fc2 = nn.Linear(self._linear_width, 10)
 
     def forward(self, x):
