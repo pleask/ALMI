@@ -55,7 +55,7 @@ class DigitsClassifier(nn.Module, MetadataBase):
         relative_path = 'base_model.pickle'
         file_path = os.path.join(current_dir, relative_path)
 
-        base_model = torch.load(file_path, {"map_location": torch.device("cpu")})
+        base_model = torch.load(file_path, map_location=torch.device("cpu"))
         self.load_state_dict(base_model)
 
         self.conv1.requires_grad = False

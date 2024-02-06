@@ -20,6 +20,6 @@ bounding-mi-repo/experiments/sklearn_digits/benchmark.py \
 --device cpu \
 --train_subject_models \
 --subject_model_count $COUNT \
---subject_model_path /nobackup/wclv88/sklearn_digits/standard/subject-models \
---subject_model_num_classes 10 \
+--subject_model_path /nobackup/wclv88/sklearn_digits/frozen/subject-models \
+--subject_model_num_classes 3 \
 --example_start_index $((SLURM_ARRAY_TASK_ID * COUNT))
